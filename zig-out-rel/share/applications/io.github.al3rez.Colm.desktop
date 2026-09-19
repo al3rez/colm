@@ -1,0 +1,25 @@
+[Desktop Entry]
+Version=1.0
+Name=Colm
+Type=Application
+Comment=Workspaces of horizontally scrolling terminals
+TryExec=clm
+Exec=clm --gtk-single-instance=true
+Icon=io.github.al3rez.Colm
+Categories=System;TerminalEmulator;
+Keywords=terminal;tty;pty;
+StartupNotify=true
+StartupWMClass=io.github.al3rez.Colm
+Terminal=false
+Actions=new-window;
+X-GNOME-UsesNotifications=true
+X-TerminalArgExec=-e
+X-TerminalArgTitle=--title=
+X-TerminalArgAppId=--class=
+X-TerminalArgDir=--working-directory=
+X-TerminalArgHold=--wait-after-command
+DBusActivatable=true
+
+[Desktop Action new-window]
+Name=New Window
+Exec=clm --gtk-single-instance=true

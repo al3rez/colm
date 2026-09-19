@@ -1,0 +1,14 @@
+[Unit]
+Description=Colm
+After=graphical-session.target
+After=dbus.socket
+Requires=dbus.socket
+
+[Service]
+Type=notify-reload
+ReloadSignal=SIGUSR2
+BusName=io.github.al3rez.Colm
+ExecStart=zig-out-rel/bin/clm --gtk-single-instance=true --initial-window=false
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=io.github.al3rez.Colm
+SystemdService=app-io.github.al3rez.Colm.service
+Exec=zig-out-rel/bin/clm --gtk-single-instance=true --initial-window=false

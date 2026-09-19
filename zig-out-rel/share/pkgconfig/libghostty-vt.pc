@@ -1,0 +1,10 @@
+prefix=zig-out-rel
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: libghostty-vt
+URL: https://github.com/ghostty-org/ghostty
+Description: Ghostty VT library
+Version: 0.1.0
+Cflags: -I${includedir}
+Libs: -L${libdir} -lghostty-vt

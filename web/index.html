@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>colm — the column terminal for agents</title>
+  <meta name="description" content="colm is a Linux terminal workspace manager for coding agents, built on Ghostty. Workspaces in a sidebar, columns in a strip, agent activity at a glance." />
+  <meta property="og:title" content="colm" />
+  <meta property="og:description" content="The column terminal for coding agents, built on Ghostty." />
+  <meta property="og:image" content="assets/screenshot.png" />
+  <link rel="icon" href="assets/icon.png" />
+  <style>
+    :root {
+      --bg: #fafafa;
+      --fg: #1a1a1a;
+      --muted: #6b6b6b;
+      --border: rgba(0, 0, 0, 0.1);
+      --accent: #3584e4;
+      --card: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121212;
+        --fg: #eeeeee;
+        --muted: #9a9a9a;
+        --border: rgba(255, 255, 255, 0.12);
+        --card: #1c1c1c;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 16px/1.5 -apple-system, "Adwaita Sans", "Cantarell", "Inter", "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    main { max-width: 42rem; margin: 0 auto; padding: 5rem 1.5rem 4rem; }
+    a { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--border); transition: text-decoration-color 0.15s; }
+    a:hover { text-decoration-color: var(--fg); }
+
+    .brand { display: flex; align-items: center; gap: 1rem; margin-bottom: 2.5rem; }
+    .brand img { width: 48px; height: 48px; border-radius: 12px; }
+    .brand h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+
+    .tagline { font-size: 1.125rem; margin: 0 0 0.75rem; }
+    .tagline .caret { display: inline-block; width: 1px; background: var(--fg); animation: blink 1s steps(1) infinite; height: 1.1em; vertical-align: text-bottom; }
+    @keyframes blink { 50% { opacity: 0; } }
+    .subtitle { color: var(--muted); margin: 0; }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 1.375rem 0 1rem; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid var(--border);
+      font-size: 0.9375rem; font-weight: 500; text-decoration: none;
+      background: var(--card);
+    }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn:hover { filter: brightness(1.05); text-decoration: none; }
+
+    h2 { font-size: 0.75rem; font-weight: 500; color: var(--muted); letter-spacing: -0.01em; margin: 2rem 0 0.75rem; }
+    ul.features { list-style: none; padding: 0; margin: 0; font-size: 0.9375rem; line-height: 1.3; }
+    ul.features li { display: flex; gap: 0.75rem; margin-bottom: 0.75rem; }
+    ul.features li::before { content: "-"; color: var(--muted); flex-shrink: 0; }
+    ul.features strong { font-weight: 500; }
+    ul.features span { color: var(--muted); }
+
+    .shot { margin: 3rem 0; position: relative; left: 50%; transform: translateX(-50%); width: min(72rem, 100vw - 3rem); }
+    .shot img { width: 100%; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 2px 24px rgba(0,0,0,0.12); display: block; }
+
+    .install pre {
+      background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.875rem 1rem; overflow-x: auto; font-size: 0.875rem;
+      font-family: "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+      margin: 0 0 0.75rem;
+    }
+    .faq p { font-size: 0.9375rem; margin: 0 0 0.25rem; }
+    .faq .q { font-weight: 500; }
+    .faq .a { color: var(--muted); margin-bottom: 1.25rem; }
+
+    footer { color: var(--muted); font-size: 0.875rem; margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand">
+      <img src="assets/icon.png" alt="colm icon" width="48" height="48" />
+      <h1>colm</h1>
+    </div>
+
+    <p class="tagline">The terminal for <span id="typed"></span><span class="caret"></span></p>
+    <p class="subtitle">
+      A Linux workspace manager for coding agents, built on
+      <a href="https://github.com/ghostty-org/ghostty">Ghostty</a>.
+      Workspaces live in a sidebar, terminals live in a horizontal column
+      strip, and everything is scriptable over a JSON control socket.
+    </p>
+
+    <div class="actions">
+      <a class="btn primary" href="#install">Install</a>
+      <a class="btn" href="https://github.com/al3rez/colm">GitHub</a>
+    </div>
+
+    <section>
+      <h2>FEATURES</h2>
+      <ul class="features">
+        <li><span><strong>Workspace sidebar.</strong> <span>Pin, mute, group, and drag-reorder workspaces. Each row shows task status, git branch, agent activity, and a live notification preview.</span></span></li>
+        <li><span><strong>Column strip.</strong> <span>Terminals tile horizontally like niri. Split, zoom, and jump between columns without leaving the keyboard.</span></span></li>
+        <li><span><strong>Column overview.</strong> <span>A native-style grid of live column thumbnails — search, click, or arrow-key to any tile in the active workspace.</span></span></li>
+        <li><span><strong>Agent aware.</strong> <span>Permission prompts, exit plans, and questions from Claude Code and friends surface as cards you can answer from the feed sidebar.</span></span></li>
+        <li><span><strong>Remote workspaces.</strong> <span>Attach whole workspaces to remote machines over SSH with tmux-backed persistence.</span></span></li>
+        <li><span><strong>Scriptable.</strong> <span>Every window, workspace, and pane is addressable over a JSON-RPC unix socket — create, focus, split, close, snapshot.</span></span></li>
+        <li><span><strong>Ghostty core.</strong> <span>GPU-accelerated rendering, fast startup, and the full Ghostty terminal engine underneath.</span></span></li>
+        <li><span><strong>Open source.</strong> <span>MIT licensed, like the Ghostty it stands on.</span></span></li>
+      </ul>
+    </section>
+
+    <div class="shot">
+      <img src="assets/screenshot.png" alt="colm showing the workspace sidebar and column overview" />
+    </div>
+
+    <section class="install" id="install">
+      <h2>INSTALL</h2>
+      <pre>git clone https://github.com/al3rez/colm
+cd colm
+zig build -Doptimize=ReleaseFast -p ~/.local/opt/colm</pre>
+      <p class="subtitle">Requires Zig 0.15, GTK 4.16+, and libadwaita 1.5+.</p>
+    </section>
+
+    <section class="faq">
+      <h2>FAQ</h2>
+      <p class="q">How is this different from Ghostty?</p>
+      <p class="a">colm is a fork focused on managing many agent sessions at once: a workspace sidebar, a niri-style column strip, live overviews, and an automation socket. The terminal underneath is unmodified Ghostty.</p>
+      <p class="q">Which platforms?</p>
+      <p class="a">Linux with GTK 4 and libadwaita. Wayland and X11 both work.</p>
+      <p class="q">Which agents?</p>
+      <p class="a">Anything that runs in a terminal. Claude Code, Codex, OpenCode, aider — permission and plan prompts integrate with the feed when the agent supports it.</p>
+      <p class="q">Is it free?</p>
+      <p class="a">Yes. MIT licensed, no accounts, no telemetry.</p>
+    </section>
+
+    <footer>
+      colm is built on <a href="https://github.com/ghostty-org/ghostty">Ghostty</a> by Mitchell Hashimoto and contributors.
+      &nbsp;·&nbsp; <a href="https://github.com/al3rez/colm">Source</a>
+    </footer>
+  </main>
+
+  <script>
+    // cmux-style typing tagline.
+    const words = ["coding agents.", "column workflows.", "remote machines.", "many workspaces."];
+    const el = document.getElementById("typed");
+    let wi = 0, ci = 0, deleting = false;
+    function tick() {
+      const word = words[wi];
+      el.textContent = word.slice(0, ci);
+      let delay = deleting ? 40 : 80;
+      if (!deleting && ci === word.length) { delay = 1800; deleting = true; }
+      else if (deleting && ci === 0) { deleting = false; wi = (wi + 1) % words.length; delay = 300; }
+      else ci += deleting ? -1 : 1;
+      setTimeout(tick, delay);
+    }
+    tick();
+  </script>
+</body>
+</html>
