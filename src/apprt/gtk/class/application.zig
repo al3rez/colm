@@ -14,6 +14,7 @@ const i18n = @import("../../../os/main.zig").i18n;
 const apprt = @import("../../../apprt.zig");
 const CoreApp = @import("../../../App.zig");
 const configpkg = @import("../../../config.zig");
+const appearance = @import("../../../config/appearance.zig");
 const input = @import("../../../input.zig");
 const internal_os = @import("../../../os/main.zig");
 const systemd = @import("../../../os/systemd.zig");
@@ -170,6 +171,9 @@ pub const Application = extern struct {
         /// The configuration for the application.
         config: *Config,
 
+        /// Appearance choices owned by the native preferences UI.
+        appearance_preferences: appearance.Preferences = .{},
+
         /// State and logic for the underlying windowing protocol.
         winproto: winprotopkg.App,
 
@@ -185,6 +189,7 @@ pub const Application = extern struct {
         /// should exit and the application should quit. This must
         /// only be set by the main loop thread.
         running: bool = false,
+        quit_requested: bool = false,
 
         /// The timer used to quit the application after the last window is
         /// closed. Even if there is no quit delay set, this is the state
@@ -208,6 +213,9 @@ pub const Application = extern struct {
 
         /// Providers for loading custom stylesheets defined by user
         custom_css_providers: std.ArrayListUnmanaged(*gtk.CssProvider) = .empty,
+        custom_css_monitors: std.ArrayListUnmanaged(*gio.FileMonitor) = .empty,
+        css_reload_source: ?c_uint = null,
+
 
         /// A copy of the LANG environment variable that was provided to Ghostty
         /// by the system. If this is null, the LANG environment variable did
@@ -245,6 +253,8 @@ pub const Application = extern struct {
         // Capture GLib/GObject/GTK log messages and funnel them through Zig's
         // logging system rather than just getting dumped directly to stderr.
         _ = glib.logSetWriterFunc(glibLogWriterFunction, null, null);
+        glib.setApplicationName("Colm");
+        glib.setPrgname("clm");
 
         // Log our GTK versions
         gtk_version.logVersion();
@@ -316,8 +326,7 @@ pub const Application = extern struct {
         };
 
         // Our app ID determines uniqueness and maps to our desktop file.
-        // We append "-debug" to the ID if we're in debug mode so that we
-        // can develop Ghostty in Ghostty.
+        // Colm has its own bus name and never activates a Ghostty instance.
         const app_id: [:0]const u8 = app_id: {
             if (config.class) |class| {
                 if (gio.Application.idIsValid(class) != 0) {
@@ -381,7 +390,7 @@ pub const Application = extern struct {
             // Force the resource path to a known value so it doesn't depend
             // on the app id (which changes between debug/release and can be
             // user-configured) and force it to load in compiled resources.
-            .resource_base_path = "/com/mitchellh/ghostty",
+            .resource_base_path = "/io/github/al3rez/Colm",
         });
 
         // Setup our private state. More setup is done in the init
@@ -430,6 +439,7 @@ pub const Application = extern struct {
     pub fn deinit(self: *Self) void {
         const alloc = self.allocator();
         const priv: *Private = self.private();
+        appearance.deinit(alloc, &priv.appearance_preferences);
         priv.config.unref();
         priv.winproto.deinit(alloc);
         priv.global_shortcuts.unref();
@@ -450,6 +460,13 @@ pub const Application = extern struct {
         priv.css_provider.unref();
         for (priv.custom_css_providers.items) |provider| provider.unref();
         priv.custom_css_providers.deinit(alloc);
+        for (priv.custom_css_monitors.items) |monitor| {
+            _ = monitor.cancel();
+            monitor.unref();
+        }
+        priv.custom_css_monitors.deinit(alloc);
+        if (priv.css_reload_source) |source| _ = glib.Source.remove(source);
+
     }
 
     /// The global allocator that all other classes should use by
@@ -547,6 +564,9 @@ pub const Application = extern struct {
 
             // Check if we must quit based on the current state.
             const must_quit = q: {
+                // An explicit quit must wait for remote close acknowledgments,
+                // even when the app normally remains alive without windows.
+                if (priv.quit_requested and @as(?*glib.List, self.as(gtk.Application).getWindows()) == null) break :q true;
                 // If we are configured to always stay running, don't quit.
                 const config = priv.config.get();
                 if (!config.@"quit-after-last-window-closed") break :q false;
@@ -575,6 +595,10 @@ pub const Application = extern struct {
             };
 
             if (must_quit) {
+                // A control request may have destroyed the final window.
+                // Let the endpoint flush its already-generated JSON reply
+                // before disposal closes client sockets and exits the loop.
+                if (@import("../control.zig").hasPendingReply()) continue;
                 // All must quit scenarios do not need confirmation.
                 // Furthermore, must quit scenarios may result in a situation
                 // where its unsafe to even access the app/surface memory
@@ -631,6 +655,13 @@ pub const Application = extern struct {
     }
 
     fn quitNow(self: *Self) void {
+        @import("../automation.zig").saveSession() catch |err| {
+            log.warn("unable to save session before shutdown: {s}", .{@errorName(err)});
+        };
+        // Leave remote tmux sessions running. Local PTYs die with the
+        // window; ssh.reconnect restores them on next activate.
+        @import("../automation.zig").detachRemotes();
+        self.private().quit_requested = true;
         // Get all our windows and destroy them, forcing them to free.
         const list = gtk.Window.listToplevels();
         defer list.free();
@@ -658,6 +689,26 @@ pub const Application = extern struct {
         self.private().running = false;
     }
 
+    pub fn reexec(self: *Self) void {
+        self.quitNow();
+        const argv = std.os.argv;
+        if (argv.len == 0) {
+            log.warn("reexec: empty argv", .{});
+            return;
+        }
+        var buf: [64]?[*:0]const u8 = undefined;
+        if (argv.len >= buf.len) {
+            log.warn("reexec: argv too long", .{});
+            return;
+        }
+        for (argv, 0..) |arg, i| buf[i] = arg;
+        buf[argv.len] = null;
+        const argv_z: [*:null]const ?[*:0]const u8 = @ptrCast(&buf);
+        const err = std.posix.execveZ(argv[0], argv_z, std.c.environ);
+        log.warn("reexec failed: {}", .{err});
+    }
+
+
     /// apprt API to perform an action.
     pub fn performAction(
         self: *Self,
@@ -670,6 +721,12 @@ pub const Application = extern struct {
             .close_window => return Action.closeWindow(target),
 
             .copy_title_to_clipboard => return Action.copyTitleToClipboard(target),
+            .jump_unread => return Action.jumpUnread(target),
+            .mark_oldest_unread => return Action.markOldestUnread(target),
+            .restore_previous_session => return Action.restorePreviousSession(target),
+            .new_empty_group => return Action.newEmptyGroup(target),
+            .group_selection => return Action.groupSelection(target),
+
 
             .config_change => try Action.configChange(
                 self,
@@ -863,6 +920,23 @@ pub const Application = extern struct {
         // Load standard css first as it can override some of the user configured styling.
         try loadRuntimeCss414(config, writer);
         try loadRuntimeCss416(config, writer);
+
+        if (config.@"window-theme" == .ghostty) {
+            try writer.print(
+                \\.colm-window, .colm-sidebar {{
+                \\  background-color: rgb({d},{d},{d});
+                \\  color: rgb({d},{d},{d});
+                \\}}
+                \\
+            , .{
+                config.background.r,
+                config.background.g,
+                config.background.b,
+                config.foreground.r,
+                config.foreground.g,
+                config.foreground.b,
+            });
+        }
 
         const unfocused_fill: CoreConfig.Color = config.@"unfocused-split-fill" orelse config.background;
 
@@ -1066,6 +1140,13 @@ pub const Application = extern struct {
             provider.unref();
         }
         priv.custom_css_providers.clearRetainingCapacity();
+        for (priv.custom_css_monitors.items) |monitor| {
+            _ = monitor.cancel();
+            monitor.unref();
+        }
+        priv.custom_css_monitors.clearRetainingCapacity();
+
+
 
         const config = priv.config.get();
         for (config.@"gtk-custom-css".value.items) |p| {
@@ -1122,7 +1203,48 @@ pub const Application = extern struct {
                 css_provider.as(gtk.StyleProvider),
                 gtk.STYLE_PROVIDER_PRIORITY_USER,
             );
+            const path_z = alloc.dupeZ(u8, path) catch continue;
+            defer alloc.free(path_z);
+            const gfile = gio.File.newForPath(path_z);
+            defer gfile.unref();
+            if (gfile.monitorFile(.{}, null, null)) |monitor| {
+                monitor.setRateLimit(250);
+                _ = gio.FileMonitor.signals.changed.connect(
+                    monitor,
+                    *Self,
+                    customCssChanged,
+                    self,
+                    .{},
+                );
+                priv.custom_css_monitors.append(alloc, monitor) catch {
+                    _ = monitor.cancel();
+                    monitor.unref();
+                };
+            }
         }
+    }
+
+    fn customCssChanged(
+        _: *gio.FileMonitor,
+        _: *gio.File,
+        _: ?*gio.File,
+        event: gio.FileMonitorEvent,
+        self: *Self,
+    ) callconv(.c) void {
+        switch (event) {
+            .changed, .changes_done_hint, .created, .attribute_changed => {},
+            else => return,
+        }
+        const priv = self.private();
+        if (priv.css_reload_source) |source| _ = glib.Source.remove(source);
+        priv.css_reload_source = glib.timeoutAdd(200, reloadCustomCssIdle, self);
+    }
+
+    fn reloadCustomCssIdle(data: ?*anyopaque) callconv(.c) c_int {
+        const self: *Self = @ptrCast(@alignCast(data.?));
+        self.private().css_reload_source = null;
+        self.loadCustomCss() catch |err| log.warn("gtk-custom-css reload failed: {}", .{err});
+        return 0;
     }
 
     fn syncActionAccelerators(self: *Self) void {
@@ -1195,6 +1317,25 @@ pub const Application = extern struct {
         return self.private().config.ref();
     }
 
+    /// Borrowed snapshot; theme storage remains valid until config changes.
+    pub fn getAppearance(self: *Self) appearance.Preferences {
+        return self.private().appearance_preferences;
+    }
+
+    pub fn setAppearance(self: *Self, preferences: appearance.Preferences) !void {
+        const current = self.getAppearance();
+        const same_theme = if (preferences.theme) |theme|
+            if (current.theme) |old| std.mem.eql(u8, theme, old) else false
+        else
+            current.theme == null;
+        if (current.scheme == preferences.scheme and
+            current.inherit_terminal_colors == preferences.inherit_terminal_colors and same_theme)
+            return;
+
+        try appearance.save(self.allocator(), preferences);
+        try Action.reloadConfig(self, .app, .{});
+    }
+
     /// Set the configuration for this application. The reference count
     /// is increased on the new configuration and the old one is
     /// unreferenced.
@@ -1215,6 +1356,23 @@ pub const Application = extern struct {
         _: *gobject.ParamSpec,
         self: *Self,
     ) callconv(.c) void {
+        const priv = self.private();
+        if (appearance.load(self.allocator())) |preferences| {
+            appearance.deinit(self.allocator(), &priv.appearance_preferences);
+            priv.appearance_preferences = preferences;
+        } else |err| {
+            log.warn("unable to load appearance preferences: {}", .{err});
+        }
+        const config = priv.config.get();
+        priv.appearance_preferences.scheme = config.@"gtk-color-scheme" orelse
+            switch (config.@"window-theme") {
+                .light => .light,
+                .dark => .dark,
+                else => .system,
+            };
+        priv.appearance_preferences.inherit_terminal_colors = config.@"window-theme" == .ghostty;
+        self.syncStyleManager();
+
         // Sync our accelerators for menu items.
         self.syncActionAccelerators();
 
@@ -1303,6 +1461,10 @@ pub const Application = extern struct {
         // Setup our global shortcuts
         self.startupGlobalShortcuts();
 
+        @import("../control.zig").start() catch |err| {
+            log.err("Colm control endpoint unavailable: {s}", .{@errorName(err)});
+        };
+
         // If we have any config diagnostics from loading, then we
         // show the diagnostics dialog. We show this one as a general
         // modal (not to any specific window) because we don't even
@@ -1340,16 +1502,18 @@ pub const Application = extern struct {
         }
     }
 
-    /// Setup the style manager on startup. The primary task here is to
-    /// setup our initial light/dark mode based on the configuration and
-    /// setup listeners for changes to the style manager.
-    fn startupStyleManager(self: *Self) void {
+    /// Sync native style without changing the user's terminal palette.
+    fn syncStyleManager(self: *Self) void {
         const priv = self.private();
         const config = priv.config.get();
 
-        // Setup our initial light/dark
-        const style = self.as(adw.Application).getStyleManager();
-        style.setColorScheme(switch (config.@"window-theme") {
+        const scheme: adw.ColorScheme = if (config.@"gtk-color-scheme") |mode|
+            switch (mode) {
+                .system => .prefer_light,
+                .light => .force_light,
+                .dark => .force_dark,
+            }
+        else switch (config.@"window-theme") {
             .auto, .ghostty => auto: {
                 const lum = config.background.toTerminalRGB().perceivedLuminance();
                 break :auto if (lum > 0.5)
@@ -1360,7 +1524,14 @@ pub const Application = extern struct {
             .system => .prefer_light,
             .dark => .force_dark,
             .light => .force_light,
-        });
+        };
+        self.as(adw.Application).getStyleManager().setColorScheme(scheme);
+    }
+
+    /// Connect native style notifications once, then sync terminal conditionals.
+    fn startupStyleManager(self: *Self) void {
+        self.syncStyleManager();
+        const style = self.as(adw.Application).getStyleManager();
 
         // Setup color change notifications
         _ = gobject.Object.signals.notify.connect(
@@ -1396,11 +1567,15 @@ pub const Application = extern struct {
         const as_variant_type = glib.VariantType.new("as");
         defer as_variant_type.free();
 
+        const s_variant_type = glib.ext.VariantType.newFor([:0]const u8);
+        defer s_variant_type.free();
+
         const actions = [_]ext.actions.Action(Self){
             .init("new-window", actionNewWindow, null),
             .init("new-window-command", actionNewWindow, as_variant_type),
             .init("open-config", actionOpenConfig, null),
             .init("present-surface", actionPresentSurface, t_variant_type),
+            .init("feed-reply", actionFeedReply, s_variant_type),
             .init("quit", actionQuit, null),
             .init("reload-config", actionReloadConfig, null),
         };
@@ -1439,11 +1614,14 @@ pub const Application = extern struct {
     fn activate(self: *Self) callconv(.c) void {
         log.debug("activate", .{});
 
-        // Queue a new window
-        const priv = self.private();
-        _ = priv.core_app.mailbox.push(.{
-            .new_window = .{},
-        }, .{ .forever = {} });
+        // Restore the last app-owned topology on the first activation. Later
+        // activations retain the normal new-window behavior.
+        if (!@import("../automation.zig").restoreSession()) {
+            const priv = self.private();
+            _ = priv.core_app.mailbox.push(.{
+                .new_window = .{},
+            }, .{ .forever = {} });
+        }
 
         // Call the parent activate method.
         gio.Application.virtual_methods.activate.call(
@@ -1453,6 +1631,7 @@ pub const Application = extern struct {
     }
 
     fn dispose(self: *Self) callconv(.c) void {
+        @import("../control.zig").stop();
         const priv = self.private();
         if (priv.config_errors_dialog.get()) |diag| {
             diag.close();
@@ -1785,6 +1964,22 @@ pub const Application = extern struct {
         _ = self.core().mailbox.push(.open_config, .forever);
     }
 
+    fn actionFeedReply(
+        _: *gio.SimpleAction,
+        parameter_: ?*glib.Variant,
+        _: *Self,
+    ) callconv(.c) void {
+        const parameter = parameter_ orelse return;
+        const s = glib.ext.VariantType.newFor([:0]const u8);
+        defer glib.VariantType.free(s);
+        if (glib.Variant.isOfType(parameter, s) == 0) return;
+        var len: usize = 0;
+        const raw = parameter.getString(&len);
+        const span = raw[0..len];
+        const sep = std.mem.lastIndexOfScalar(u8, span, ':') orelse return;
+        @import("../automation.zig").replyFeed(span[0..sep], span[sep + 1 ..]);
+    }
+
     fn actionPresentSurface(
         _: *gio.SimpleAction,
         parameter_: ?*glib.Variant,
@@ -1931,14 +2126,14 @@ const Action = struct {
         switch (target) {
             .app => {},
             .surface => |v| {
-                v.rt_surface.gobj().sendDesktopNotification(n.title, n.body);
+                @import("../automation.zig").recordOscNotification(v.rt_surface.gobj(), n.title, n.body);
                 return;
             },
         }
 
         // Set a default title if we don't already have one
         const t = switch (n.title.len) {
-            0 => "Ghostty",
+            0 => "Colm",
             else => n.title,
         };
 
@@ -1946,7 +2141,7 @@ const Action = struct {
         defer notification.unref();
         notification.setBody(n.body);
 
-        const icon = gio.ThemedIcon.new("com.mitchellh.ghostty");
+        const icon = gio.ThemedIcon.new("io.github.al3rez.Colm");
         defer icon.unref();
         notification.setIcon(icon.as(gio.Icon));
         notification.setDefaultActionAndTargetValue(
@@ -2711,11 +2906,11 @@ const Action = struct {
                     Window,
                     surface.as(gtk.Widget),
                 ) orelse {
-                    log.warn("surface is not in a window, ignoring new_tab", .{});
+                    log.warn("surface is not in a window, ignoring toggle_tab_overview", .{});
                     return false;
                 };
 
-                window.toggleTabOverview();
+                window.toggleColumnOverview();
                 return true;
             },
         }
@@ -2756,6 +2951,53 @@ const Action = struct {
                 return surface.rt_surface.gobj().controlInspector(value);
             },
         }
+    }
+
+    pub fn jumpUnread(target: apprt.Target) bool {
+        const automation = @import("../automation.zig");
+        return switch (target) {
+            .app => automation.jumpLatestUnread(),
+            .surface => automation.jumpLatestUnread(),
+        };
+    }
+
+    pub fn markOldestUnread(target: apprt.Target) bool {
+        const automation = @import("../automation.zig");
+        _ = target;
+        return automation.markOldestUnreadAndJumpNext();
+    }
+
+    pub fn restorePreviousSession(target: apprt.Target) bool {
+        _ = target;
+        return @import("../automation.zig").restorePreviousSession() catch false;
+    }
+
+    pub fn newEmptyGroup(target: apprt.Target) bool {
+        const win = windowFromActionTarget(target) orelse return false;
+        win.newEmptyGroup();
+        return true;
+    }
+
+    pub fn groupSelection(target: apprt.Target) bool {
+        const win = windowFromActionTarget(target) orelse return false;
+        const page = win.getTabView().getSelectedPage() orelse return false;
+        const tab = gobject.ext.cast(Tab, page.getChild()) orelse return false;
+        win.groupWorkspaces(tab);
+        return true;
+    }
+
+    fn windowFromActionTarget(target: apprt.Target) ?*Window {
+        return switch (target) {
+            .app => window: {
+                var node: ?*glib.List = Application.default().as(gtk.Application).getWindows();
+                while (node) |n| : (node = n.f_next) {
+                    if (gobject.ext.cast(Window, @as(*gtk.Window, @ptrCast(@alignCast(n.f_data.?))))) |win|
+                        break :window win;
+                }
+                break :window null;
+            },
+            .surface => |core| ext.getAncestor(Window, core.rt_surface.gobj().as(gtk.Widget)),
+        };
     }
 
     pub fn commandFinished(target: apprt.Target, value: apprt.Action.Value(.command_finished)) bool {

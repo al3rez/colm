@@ -105,10 +105,6 @@ pub inline fn supportsDialogs() bool {
     return atLeast(1, 5, 0);
 }
 
-pub inline fn supportsTabOverview() bool {
-    return atLeast(1, 4, 0);
-}
-
 pub inline fn supportsSwitchRow() bool {
     return atLeast(1, 4, 0);
 }

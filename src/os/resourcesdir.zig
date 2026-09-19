@@ -38,17 +38,17 @@ pub const ResourcesDir = struct {
 /// This is highly Ghostty-specific and can likely be generalized at
 /// some point but we can cross that bridge if we ever need to.
 pub fn resourcesDir(alloc: Allocator) !ResourcesDir {
-    // Use the GHOSTTY_RESOURCES_DIR environment variable in release builds.
-    //
-    // In debug builds we try using terminfo detection first instead, since
-    // if debug Ghostty is launched by an older version of Ghostty, it
-    // would inherit the old, stale resources of older Ghostty instead of the
-    // freshly built ones under zig-out/share/ghostty.
+    // Colm uses a separate override so launching it from Ghostty cannot
+    // accidentally inherit another application's resources.
+    const resources_env = if (builtin.os.tag == .linux)
+        "COLM_RESOURCES_DIR"
+    else
+        "GHOSTTY_RESOURCES_DIR";
     //
     // Note: we ALWAYS want to allocate here because the result is always
     // freed, do not try to use internal_os.getenv or posix getenv.
     if (comptime builtin.mode != .Debug) {
-        if (std.process.getEnvVarOwned(alloc, "GHOSTTY_RESOURCES_DIR")) |dir| {
+        if (std.process.getEnvVarOwned(alloc, resources_env)) |dir| {
             if (dir.len > 0) return .{ .app_path = dir };
         } else |err| switch (err) {
             error.EnvironmentVariableNotFound => {},
@@ -62,6 +62,7 @@ pub fn resourcesDir(alloc: Allocator) !ResourcesDir {
         .windows => .{"terminfo/ghostty.terminfo"},
         .macos => .{"terminfo/78/xterm-ghostty"},
         .freebsd => .{ "site-terminfo/g/ghostty", "site-terminfo/x/xterm-ghostty" },
+        .linux => .{"colm/shell-integration/bash/ghostty.bash"},
         else => .{ "terminfo/g/ghostty", "terminfo/x/xterm-ghostty" },
     };
 
@@ -94,7 +95,7 @@ pub fn resourcesDir(alloc: Allocator) !ResourcesDir {
                 if (builtin.target.os.tag == .freebsd) "local/share" else "share",
                 sentinel,
             )) |v| {
-                return .{ .app_path = try std.fs.path.join(alloc, &.{ v, "ghostty" }) };
+                return .{ .app_path = try std.fs.path.join(alloc, &.{ v, if (builtin.os.tag == .linux) "colm" else "ghostty" }) };
             }
         }
     }
@@ -102,7 +103,7 @@ pub fn resourcesDir(alloc: Allocator) !ResourcesDir {
     // If terminfo detection failed in debug builds (somehow),
     // fallback and use the provided resources dir.
     if (comptime builtin.mode == .Debug) {
-        if (std.process.getEnvVarOwned(alloc, "GHOSTTY_RESOURCES_DIR")) |dir| {
+        if (std.process.getEnvVarOwned(alloc, resources_env)) |dir| {
             if (dir.len > 0) return .{ .app_path = dir };
         } else |err| switch (err) {
             error.EnvironmentVariableNotFound => {},

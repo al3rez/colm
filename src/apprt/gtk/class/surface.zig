@@ -778,7 +778,7 @@ pub const Surface = extern struct {
         if (priv.config) |config_obj| {
             // Setup our cwd if configured to inherit
             if (apprt.surface.shouldInheritWorkingDirectory(context, config_obj.get())) {
-                if (parent.rt_surface.surface.getPwd()) |pwd| {
+                if (@import("../automation.zig").localDirectory(parent.rt_surface.surface)) |pwd| {
                     priv.pwd = glib.ext.dupeZ(u8, pwd);
                     self.as(gobject.Object).notifyByPspec(properties.pwd.impl.param_spec);
                 }
@@ -1608,6 +1608,7 @@ pub const Surface = extern struct {
             }
         }
 
+        try @import("../automation.zig").subprocessEnv(self, &env);
         return env;
     }
 
@@ -1725,7 +1726,7 @@ pub const Surface = extern struct {
         };
 
         const t = switch (title.len) {
-            0 => "Ghostty",
+            0 => "Colm",
             else => title,
         };
 
@@ -1733,7 +1734,7 @@ pub const Surface = extern struct {
         defer notification.unref();
         notification.setBody(body);
 
-        const icon = gio.ThemedIcon.new("com.mitchellh.ghostty");
+        const icon = gio.ThemedIcon.new("io.github.al3rez.Colm");
         defer icon.unref();
         notification.setIcon(icon.as(gio.Icon));
 
@@ -1967,6 +1968,10 @@ pub const Surface = extern struct {
         return priv.title_override orelse priv.title;
     }
 
+    pub fn getTitleOverride(self: *Self) ?[:0]const u8 {
+        return self.private().title_override;
+    }
+
     /// Copies the effective title to the clipboard.
     pub fn copyTitleToClipboard(self: *Self) bool {
         const title = self.getEffectiveTitle() orelse return false;
@@ -1987,6 +1992,9 @@ pub const Surface = extern struct {
         priv.title = null;
         if (title) |v| priv.title = glib.ext.dupeZ(u8, v);
         self.as(gobject.Object).notifyByPspec(properties.title.impl.param_spec);
+        const automation = @import("../automation.zig");
+        if (title) |v| automation.observeProcessTitle(self, v);
+        automation.sessionChanged();
     }
 
     /// Overridden title. This will be generally be shown over the title
@@ -1997,6 +2005,7 @@ pub const Surface = extern struct {
         priv.title_override = null;
         if (title) |v| priv.title_override = glib.ext.dupeZ(u8, v);
         self.as(gobject.Object).notifyByPspec(properties.@"title-override".impl.param_spec);
+        @import("../automation.zig").sessionChanged();
     }
 
     /// Returns the pwd property without a copy.
@@ -2011,6 +2020,7 @@ pub const Surface = extern struct {
         priv.pwd = null;
         if (pwd) |v| priv.pwd = glib.ext.dupeZ(u8, v);
         self.as(gobject.Object).notifyByPspec(properties.pwd.impl.param_spec);
+        @import("../automation.zig").sessionChanged();
     }
 
     /// Returns the focus state of this surface.
@@ -2625,6 +2635,7 @@ pub const Surface = extern struct {
                 break :list fl.getFiles();
             };
             defer if (list) |v| v.free();
+            var remote_upload = false;
 
             {
                 var current: ?*glib.SList = list;
@@ -2633,6 +2644,10 @@ pub const Surface = extern struct {
                     const path = file.getPath() orelse continue;
                     const slice = std.mem.span(path);
                     defer glib.free(path);
+                    if (@import("../automation.zig").uploadDroppedFile(self, slice)) {
+                        remote_upload = true;
+                        continue;
+                    }
 
                     writer.writeAll(slice) catch |err| {
                         log.err("unable to write path to buffer: {}", .{err});
@@ -2644,6 +2659,7 @@ pub const Surface = extern struct {
                     };
                 }
             }
+            if (remote_upload) return 1;
 
             const string = stream.toOwnedSliceSentinel(0) catch |err| {
                 log.err("unable to convert to a slice: {}", .{err});
@@ -2658,6 +2674,8 @@ pub const Surface = extern struct {
             const object = value.getObject() orelse return 0;
             const file = gobject.ext.cast(gio.File, object) orelse return 0;
             const path = file.getPath() orelse return 0;
+            defer glib.free(path);
+            if (@import("../automation.zig").uploadDroppedFile(self, std.mem.span(path))) return 1;
             var stream: std.Io.Writer.Allocating = .init(alloc);
             defer stream.deinit();
 
@@ -2677,6 +2695,7 @@ pub const Surface = extern struct {
                 return 0;
             };
             defer alloc.free(string);
+            Clipboard.paste(self, string);
             return 1;
         }
 
@@ -2731,6 +2750,7 @@ pub const Surface = extern struct {
 
         // Bell stops ringing as soon as we gain focus
         self.setBellRinging(false);
+        @import("../automation.zig").surfaceFocused(self);
     }
 
     fn ecFocusLeave(_: *gtk.EventControllerFocus, self: *Self) callconv(.c) void {
@@ -3397,7 +3417,7 @@ pub const Surface = extern struct {
 
         // Properties that can impact surface init
         if (priv.font_size_request) |size| config.@"font-size" = size.points;
-        if (priv.pwd) |pwd| {
+        if (@import("../automation.zig").localDirectory(self)) |pwd| {
             const config_alloc = config.arenaAlloc();
             var wd_val: configpkg.WorkingDirectory = .{ .path = try config_alloc.dupe(u8, pwd) };
             try wd_val.finalize(config_alloc);
@@ -3419,6 +3439,26 @@ pub const Surface = extern struct {
 
         // Store it!
         priv.core_surface = surface;
+
+        // Publish the initial directory even when the command has no shell
+        // integration. Subsequent OSC 7 reports keep this property current.
+        {
+            surface.renderer_state.mutex.lock();
+            defer surface.renderer_state.mutex.unlock();
+            if (surface.io.terminal.getPwd()) |pwd| {
+                if (priv.pwd) |old| glib.free(@ptrCast(@constCast(old)));
+                priv.pwd = glib.ext.dupeZ(u8, pwd);
+            }
+        }
+        if (priv.pwd == null) {
+            var cwd_buf: [std.fs.max_path_bytes]u8 = undefined;
+            if (std.posix.getcwd(&cwd_buf)) |cwd| {
+                priv.pwd = glib.ext.dupeZ(u8, cwd);
+            } else |err| {
+                log.warn("unable to read initial directory err={}", .{err});
+            }
+        }
+        self.as(gobject.Object).notifyByPspec(properties.pwd.impl.param_spec);
 
         // Emit the signal that we initialized the surface.
         Surface.signals.init.impl.emit(

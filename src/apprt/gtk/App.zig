@@ -3,7 +3,6 @@
 const App = @This();
 
 const std = @import("std");
-const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const apprt = @import("../../apprt.zig");
 const configpkg = @import("../../config.zig");
@@ -22,16 +21,10 @@ const log = std.log.scoped(.gtk);
 pub const must_draw_from_app_thread = true;
 
 /// GTK application ID
-pub const application_id = switch (builtin.mode) {
-    .Debug, .ReleaseSafe => "com.mitchellh.ghostty-debug",
-    .ReleaseFast, .ReleaseSmall => "com.mitchellh.ghostty",
-};
+pub const application_id = "io.github.al3rez.Colm";
 
 /// GTK object path
-pub const object_path = switch (builtin.mode) {
-    .Debug, .ReleaseSafe => "/com/mitchellh/ghostty_debug",
-    .ReleaseFast, .ReleaseSmall => "/com/mitchellh/ghostty",
-};
+pub const object_path = "/io/github/al3rez/Colm";
 
 /// The GObject Application instance
 app: *Application,

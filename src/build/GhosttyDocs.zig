@@ -14,6 +14,7 @@ pub fn init(
 ) !GhosttyDocs {
     var steps: std.ArrayList(*std.Build.Step) = .empty;
     errdefer steps.deinit(b.allocator);
+    const resource_name = if (deps.config.target.result.os.tag == .linux) "colm" else "ghostty";
 
     const manpages = [_]struct {
         name: []const u8,
@@ -54,7 +55,7 @@ pub fn init(
 
         try steps.append(b.allocator, &b.addInstallFile(
             markdown_output,
-            "share/ghostty/doc/" ++ manpage.name ++ "." ++ manpage.section ++ ".md",
+            b.fmt("share/{s}/doc/{s}.{s}.md", .{ resource_name, resource_name, manpage.section }),
         ).step);
 
         const generate_html = b.addSystemCommand(&.{"pandoc"});
@@ -69,7 +70,7 @@ pub fn init(
 
         try steps.append(b.allocator, &b.addInstallFile(
             generate_html.captureStdOut(),
-            "share/ghostty/doc/" ++ manpage.name ++ "." ++ manpage.section ++ ".html",
+            b.fmt("share/{s}/doc/{s}.{s}.html", .{ resource_name, resource_name, manpage.section }),
         ).step);
 
         const generate_manpage = b.addSystemCommand(&.{"pandoc"});
@@ -84,7 +85,7 @@ pub fn init(
 
         try steps.append(b.allocator, &b.addInstallFile(
             generate_manpage.captureStdOut(),
-            "share/man/man" ++ manpage.section ++ "/" ++ manpage.name ++ "." ++ manpage.section,
+            b.fmt("share/man/man{s}/{s}.{s}", .{ manpage.section, resource_name, manpage.section }),
         ).step);
     }
 

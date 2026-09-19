@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const args = @import("args.zig");
 const Action = @import("ghostty.zig").Action;
@@ -33,24 +34,25 @@ pub fn run(alloc: Allocator) !u8 {
     var buffer: [2048]u8 = undefined;
     var stdout_writer = std.fs.File.stdout().writer(&buffer);
     const stdout = &stdout_writer.interface;
-    try stdout.writeAll(
-        \\Usage: ghostty [+action] [options]
+    const binary = if (builtin.os.tag == .linux) "clm" else "ghostty";
+    const name = if (builtin.os.tag == .linux) "Colm" else "Ghostty";
+    try stdout.print(
+        \\Usage: {[binary]s} [+action] [options]
         \\
-        \\Run the Ghostty terminal emulator or a specific helper action.
+        \\Run the {[name]s} terminal emulator or a specific helper action.
         \\
-        \\If no `+action` is specified, run the Ghostty terminal emulator.
+        \\If no `+action` is specified, run the {[name]s} terminal emulator.
         \\All configuration keys are available as command line options.
         \\To specify a configuration key, use the `--<key>=<value>` syntax
         \\where key and value are the same format you'd put into a configuration
         \\file. For example, `--font-size=12` or `--font-family="Fira Code"`.
         \\
-        \\To see a list of all available configuration options, please see
-        \\the `src/config/Config.zig` file. A future update will allow seeing
-        \\the list of configuration options from the command line.
+        \\Run `{[binary]s} +show-config --default --docs` to see all configuration
+        \\options and their default values.
         \\
         \\A special command line argument `-e <command>` can be used to run
         \\the specific command inside the terminal emulator. For example,
-        \\`ghostty -e top` will run the `top` command inside the terminal.
+        \\`{[binary]s} -e top` will run the `top` command inside the terminal.
         \\
         \\On macOS, launching the terminal emulator from the CLI is not
         \\supported and only actions are supported. Use `open -na Ghostty.app`
@@ -60,7 +62,7 @@ pub fn run(alloc: Allocator) !u8 {
         \\Available actions:
         \\
         \\
-    );
+    , .{ .binary = binary, .name = name });
 
     inline for (@typeInfo(Action).@"enum".fields) |field| {
         try stdout.print("  +{s}\n", .{field.name});
@@ -70,6 +72,14 @@ pub fn run(alloc: Allocator) !u8 {
         \\
         \\Specify `+<action> --help` to see the help for a specific action,
         \\where `<action>` is one of actions listed above.
+        \\
+    );
+    if (builtin.os.tag == .linux) try stdout.writeAll(
+        \\
+        \\Automation: clm list-workspaces, clm new-workspace, clm ssh HOST
+        \\Use `clm --help` for direct workspace, terminal, SSH, and browser commands.
+        \\Raw API: clm ctl METHOD '{"parameter":"value"}'
+        \\Use `clm ctl --help` for targeting and JSON request syntax.
         \\
     );
     try stdout.flush();

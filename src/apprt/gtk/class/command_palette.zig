@@ -164,6 +164,9 @@ pub const CommandPalette = extern struct {
         };
 
         self.collectRegularCommands(config, &commands, alloc);
+        self.collectCustomCommands(config, &commands, alloc);
+        self.collectSettingsToggles(config, &commands, alloc);
+
 
         // Sort commands
         std.mem.sort(*Command, commands.items, {}, struct {
@@ -205,6 +208,65 @@ pub const CommandPalette = extern struct {
             };
         }
     }
+
+    fn collectCustomCommands(
+        self: *CommandPalette,
+        config: *Config,
+        commands: *std.ArrayList(*Command),
+        alloc: std.mem.Allocator,
+    ) void {
+        _ = self;
+        var arena = std.heap.ArenaAllocator.init(alloc);
+        defer arena.deinit();
+        const tmp = arena.allocator();
+        const cwd = cwd: {
+            const app = Application.default();
+            if (app.core().surfaces.items.len == 0) break :cwd null;
+            break :cwd app.core().surfaces.items[0].gobj().getPwd();
+        };
+        const customs = @import("../notify_policy.zig").loadCustomCommands(tmp, cwd);
+        for (customs) |item| {
+            const text = std.fmt.allocPrint(tmp, "{s}\r", .{item.command}) catch continue;
+            const title = tmp.dupeZ(u8, item.title) catch continue;
+            const command: input.Command = .{
+                .action = .{ .text = text },
+                .title = title,
+                .description = "Custom command from cmux.json",
+            };
+            const cmd = Command.new(config, command) catch |err| {
+                log.warn("failed to create custom command: {}", .{err});
+                continue;
+            };
+            commands.append(alloc, cmd) catch {
+                cmd.unref();
+                continue;
+            };
+        }
+    }
+
+    fn collectSettingsToggles(
+        self: *CommandPalette,
+        config: *Config,
+        commands: *std.ArrayList(*Command),
+        alloc: std.mem.Allocator,
+    ) void {
+        _ = self;
+        const toggles = [_]input.Command{
+            .{ .action = .toggle_fullscreen, .title = "Settings: Fullscreen", .description = "Toggle fullscreen." },
+            .{ .action = .toggle_maximize, .title = "Settings: Maximize", .description = "Toggle maximize." },
+            .{ .action = .toggle_window_decorations, .title = "Settings: Window Decorations", .description = "Toggle window decorations." },
+            .{ .action = .toggle_tab_overview, .title = "Settings: Column Overview", .description = "Toggle the column overview." },
+        };
+        for (toggles) |command| {
+            if (!isActionSupportedOnGtk(command.action)) continue;
+            const cmd = Command.new(config, command) catch continue;
+            commands.append(alloc, cmd) catch {
+                cmd.unref();
+                continue;
+            };
+        }
+    }
+
 
     /// Check if an action is supported on GTK.
     fn isActionSupportedOnGtk(action: input.Binding.Action) bool {

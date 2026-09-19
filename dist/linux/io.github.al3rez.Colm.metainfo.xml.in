@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>@APPID@</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>@NAME@</name>
+  <summary>Workspaces of horizontally scrolling terminals</summary>
+  <description>
+    <p>Colm is a native terminal application with a workspace sidebar and horizontally scrolling terminal columns, powered by Ghostty.</p>
+  </description>
+  <launchable type="desktop-id">@APPID@.desktop</launchable>
+  <provides><binary>clm</binary></provides>
+  <content_rating type="oars-1.1"/>
+</component>

@@ -107,13 +107,16 @@ pub fn deinit(self: *App) void {
     for (self.surfaces.items) |surface| surface.deinit();
     self.surfaces.deinit(self.alloc);
 
-    // Clean up our font group cache
-    // We should have zero items in the grid set at this point because
-    // destroy only gets called when the app is shutting down and this
-    // should gracefully close all surfaces.
-    assert(self.font_grid_set.count() == 0);
+    // GTK can quit after the last window is gone while a font grid
+    // ref is still held (renderer teardown vs runloop exit). SharedGridSet
+    // deinit already frees leftover entries; do not crash a normal close.
+    const leftover = self.font_grid_set.count();
+    if (leftover != 0) {
+        log.warn("font grid cache still has {d} entries at shutdown", .{leftover});
+    }
     self.font_grid_set.deinit();
 }
+
 
 pub fn destroy(self: *App) void {
     // Deinitialize the app

@@ -639,11 +639,10 @@ const Subprocess = struct {
             try env.put("TERM", cfg.term);
             try env.put("COLORTERM", "truecolor");
 
-            // Assume that the resources directory is adjacent to the terminfo
-            // database
+            // Colm keeps terminfo private; other runtimes use the adjacent database.
             var buf: [std.fs.max_path_bytes]u8 = undefined;
             const dir = try std.fmt.bufPrint(&buf, "{s}/terminfo", .{
-                std.fs.path.dirname(base) orelse unreachable,
+                if (builtin.os.tag == .linux) base else std.fs.path.dirname(base) orelse unreachable,
             });
             try env.put("TERMINFO", dir);
         } else {
@@ -678,6 +677,7 @@ const Subprocess = struct {
             // scripts still have a way to find the Ghostty binary when
             // running in Ghostty.
             try env.put("GHOSTTY_BIN_DIR", exe_dir);
+            try env.put("GHOSTTY_BIN_PATH", exe_bin_path);
 
             // Append if we have a path. We want to append so that ghostty is
             // the last priority in the path. If we don't have a path set

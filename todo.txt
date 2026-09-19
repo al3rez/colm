@@ -1,0 +1,243 @@
+Colm vs cmux (manaflow-ai/cmux) — missing / stub features
+=========================================================
+CLI methods exist for many of these (dock.*, feed.*, vault.*, group.*,
+custom-sidebar.*) but they are feature_store key-value stubs, not the
+cmux product. "STUB" = API exists, UI/behavior does not.
+
+P0 — daily agent workflow (what you keep hitting)
+-------------------------------------------------
+[x] Pane attention ring
+    Unfocused panes with unread notifications get a blue #4C8DFF ring
+    (.column-card.needs-attention). Focused pane stays .active only.
+    workspaceFocused no longer bulk-marks every unread in the workspace.
+
+[x] Jump to latest unread (ctrl+shift+u) + mark-oldest-unread + jump next (ctrl+super+u)
+    Binding.Action jump_unread / mark_oldest_unread. CLI jump-to-unread
+    and jump-next-unread. notification.mark-oldest-unread RPC.
+
+[x] Suppress toast/banner when the target surface is already focused
+    appendNotification still uses notificationTargetIsFocused. status.set
+    does not toast. Muted workspaces also drop banners.
+
+[x] Prompt-turn detection
+    observeProcessTitle + TerminalTitleChurnFilter: spinner frames mark
+    busy; idle agent title fires title=agent / subtitle=Completed /
+    body=Task completed. Claude stop hook no longer says Finished-waiting.
+
+[x] Agent hooks setup matrix
+    hooks-install (empty provider or "all") covers claude, codex, grok,
+    opencode, cursor, gemini, copilot, codebuddy, factory, qoder, kimi,
+    pi, omp, campfire, rovo, omo, omx, omc. Session ids persist in
+    ~/.config/colm/hook-sessions.json. Resume flags per agent.
+
+[x] Needs-input bell on the workspace row
+    notification.create that looks like needs-input sets status
+    bell.fill #4C8DFF "Needs input". Feed permission cards still P2.
+
+[x] Title ownership (custom vs process vs auto)
+    Persist tab.getTitleOverride() not computed title. OSC titles go
+    through churn filter as process_title. tmux shim rename-window
+    calls rename-terminal, not rename-workspace.
+
+P1 — sidebar row parity (SidebarWorkspaceRowCellView)
+-----------------------------------------------------
+[x] Pin workspace (stays at top, close protected)
+[x] Mute workspace (bell.slash.fill accessory, drop banners)
+[x] Cloud / remote badge on the title line
+[x] Agent-activity spinner while coding agent count > 0
+[x] Hover close button + shortcut-hint pill
+[x] Markdown workspace description (cmux SidebarMarkdownRenderer)
+[x] Progress bar + latest log line on the row
+[x] Clickable PR rows and listening-port rows (not just text)
+    gtk.LinkButton for PR URL and http://127.0.0.1:port.
+[x] Branch + directory as stacked compact lines (cmux SidebarPathFormatter)
+[x] Task-status glyph (inferred + manual override + popover)
+    CLI set-task-status exists; row shows ✓/●/⚠/◼ and dims when done.
+    Click the always-visible ○/glyph or the row's Task status menu to set it.
+[x] Checklist / todo items on the row (WorkspaceTodoFeature)
+    todo.set JSON with workspace_id + text + done renders on the row.
+[x] iMessage mode: unread threads float to top
+    Unfocused unread workspaces reorder after the pinned tier.
+[x] Drag-reorder workspaces with drop indicators
+    Drag a sidebar row; drop highlight + pin-tier clamp. Pinned stay above unpinned.
+[x] Multi-select workspaces
+    Ctrl-click toggle, Shift-click range, blue outline. Right-click Pin/Mute/Close
+    applies to the selection. Hover-close also closes the selection (skips pinned).
+
+[x] Row dim when taskStatus == .done
+
+P2 — Feed (right sidebar Ctrl-4)
+--------------------------------
+Live in-memory feed store plus sidebar cards. feed.set/delete remains
+the KV config store.
+
+[x] feed.push from agent hooks; park on request_id up to 120s
+    Same request_id replaces the parked card. workstream.jsonl appends.
+[x] Permission cards: Once / Always / All tools / Bypass / Deny
+[x] ExitPlanMode cards: Ultraplan / Manual / Auto
+[x] AskUserQuestion cards
+[x] Reply verbs: feed.permission.reply / question.reply / exit_plan.reply
+    Unified feed.reply id verb. CLI: clm feed push|list|reply|tui|open.
+[x] Jump from Feed row → workspace.select + surface.focus
+    feed.reply focuses the workspace and opens the Feed sidebar.
+[x] workstream.jsonl audit log
+    ~/.local/state/colm/workstream.jsonl
+[x] OpenTUI `feed tui` in a dock terminal
+    clm feed tui writes ~/.local/state/colm/feed-tui.txt, opens the Dock
+    sidebar, splits a pane, and runs less on the dump. --dock=false for JSON only.
+[x] Native notification inline actions for those three categories
+    gio.Notification buttons: Once/Always/Deny, Ultraplan/Manual/Auto, Answer.
+    app.feed-reply::<id>:<verb> → feed.reply.
+
+
+P3 — Columns (niri strip, not cmux Dock)
+----------------------------------------
+Colm’s canvas is left-to-right columns. cmux Dock (nested Bonsplit in the
+right sidebar) does not fit. New terminal / new browser = new column.
+
+[x] New terminal column (newSplit right → TerminalColumn)
+[x] New browser column (guest-column on the same strip)
+    clm browser create / Dock sidebar "New browser column"
+[x] --placement column on new-pane (alias of a right column)
+    placement=column|dock is a no-op extra: newSplit already made the column.
+[x] Session snapshot of browser columns
+    browsers[] {browser_id, uri, profile} in session-v1.json; restore uses
+    the workspace SOCKS proxy so remote localhost still works.
+
+Dropped (fights niri):
+[ ] Dock hosts nested terminal+browser split tree in the right sidebar
+[ ] Seed .cmux/dock.json as a live split tree
+[ ] Shortcuts retarget to a Dock split host
+
+
+P4 — Browser
+------------
+browser.zig exists; compare to cmux agent-browser port.
+
+[x] Split browser next to terminal (new guest column)
+[x] agent-browser API: snapshot a11y tree, refs, click, fill, evaluate JS
+[ ] Cookie/history import from Chrome, Firefox, etc. (dropped)
+[x] Browser through SSH remote so remote localhost works
+    WebKit session uses the workspace SOCKS proxy; restore reapplies it.
+[ ] Chromeless dock browsers (dropped — niri columns have a URL bar)
+[x] Devtools / console shortcuts
+    F12 / Ctrl+Shift+I / toolbar button / clm browser.devtools
+
+P5 — SSH / remote (you have mac mini on this)
+---------------------------------------------
+[x] Restore must ssh.reconnect, not just restamp metadata
+[x] Default remote profile tmux so GUI restart does not kill the shell
+[x] CSS/dev hot reload without process replace (gtk CssProvider loadFromFile)
+    gtk-custom-css files are FileMonitor-watched; changes reload CSS in ~200ms.
+[x] Drag-drop image → scp upload
+[x] Browser panes routed through remote network
+[x] Soft reexec: saveSession + exec new binary WITHOUT closeRemoteWindow
+    Quit / systemd restart detaches local PTYs and leaves remote tmux.
+    `clm restart` saveSession + detachRemotes + execve.
+
+
+P6 — Workspace groups + organization
+------------------------------------
+Sidebar sections on the niri workspace list (not a cmux Dock).
+
+[x] Collapsible named groups with anchor workspace as header
+    First workspace in a group is the header. Click ▾/▸ to hide the rest.
+[x] ⌃⌘G empty group, ⌘⇧G group selection
+    ctrl+super+g / ctrl+shift+g. Right-click also has Group selected.
+[x] Pin groups independently; pinned tier above unpinned
+    Pinning one member pins every workspace with the same group_key.
+[x] Group + button / Cmd-N places inside the group
+    newTab inherits the selected workspace's group.
+[x] Persist groups in session-v1.json
+    group_key / group_name on the workspace snapshot.
+[x] workspace-group CLI matching cmux docs
+    clm group assign <key> <workspace_id> [--name ...]
+
+
+P7 — Session / vault / resume
+-----------------------------
+[x] Detect running agent from process argv, store native session id
+    /proc scan for COLM_TERMINAL_ID; --resume/--session/-r/codex resume.
+    clm agent detect
+[x] Resume on restore: omp --session, claude --resume, etc. (cmux vault.md)
+    hook-sessions.json + resumeStoredAgent after session restore.
+[x] Fork conversation
+    clm agent fork — new workspace, same cwd/group, resume if known.
+[x] surface resume set/show/clear (tmux attach, custom agents)
+    clm surface resume-set|resume-show|resume-clear
+[x] local-tmux owner for live detach across quit/crash/update
+    Detect tmux -t/-s; restore runs tmux attach-session -t <name>.
+[x] Reopen previous session (ctrl+shift+o)
+    Binding restore_previous_session + command palette.
+
+
+
+P8 — Notifications (deeper)
+---------------------------
+[x] OSC 9 / 99 / 777 → notification store (cmux reads these; we mostly CLI)
+    GTK desktopNotification now records via appendNotification.
+[x] cmux.json notification.hooks (stdin policy JSON → effects)
+    ~/.config/colm/cmux.json and trusted project cmux.json. timeout 2s.
+[x] Agent categories: turn-complete / needs-permission / idle-reminder
+[x] whenIdle / always / never for turn-complete
+    notifications.turnComplete in cmux.json. Default whenIdle.
+[x] suppressSubagentNotifications (on by default)
+    automation.suppressSubagentNotifications; drops subagent turn-complete.
+[x] Same-surface replace (just added; verify)
+[x] Unread-only sidebar preview (just added; verify)
+[x] Notifications panel as a real list, not only Activity dump
+    sidebar mode notifications; clm right-sidebar notifications
+[x] Phone / device push
+    device.notify appends ~/.local/state/colm/device-inbox.jsonl and toasts.
+    No APNs/FCM.
+
+P9 — Commands, automations, custom sidebars
+-------------------------------------------
+[x] cmux.json custom commands in the command palette
+    commands[] / customCommands[] become palette entries that type into the terminal.
+[x] automations.json: when event → run
+    ~/.config/colm/automations.json; when=notification|*; action=run.
+[x] Custom HTML/extension sidebars
+    Files sidebar lists customSidebars[]; click opens a browser column.
+[x] Command palette with settings toggles
+    Settings: Fullscreen / Maximize / Decorations / Tab Overview.
+[x] Find in directory
+    sidebar.find; Enter runs rg -n in the workspace cwd.
+[x] Workspace auto-naming
+    New workspace with a working directory uses the directory basename.
+
+P10 — Agent extras
+------------------
+[x] claude-teams / codex-teams
+    clm agent team sets CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1.
+[x] Computer-use / computer-use helper
+    clm computer-use open [uri] — isolated computer-use WebKit profile, 1280×800.
+    Agent drives it with existing browser.snapshot/click/fill.
+[x] Canvas layout
+    canvas.open creates browser columns from canvas.surfaces uri/url.
+[x] Simulator pane
+    clm simulator open iphone|android [uri] — mobile viewport + UA column.
+
+[x] Cloud VMs / machines sidebar
+    sidebar.machines lists feature_store machines.
+[x] Subagents panel
+    sidebar.sessions lists hook-sessions.json.
+
+Known Colm bugs to keep off the "features" list but not lose
+------------------------------------------------------------
+[x] niri: vertical splits flatten to columns
+    That is the niri column model, not a leftover Dock bug.
+
+[x] REVIEW: appearance.ghostty has unrestricted configuration authority
+    loadConfig now applies only gtk-color-scheme, window-theme, and theme
+    from Managed. command/env/keybind in a stale file cannot override Config.
+[x] REVIEW: remote helper install steps are duplicated
+    Second manager.py/helper.py install loop in GhosttyResources.zig removed.
+[x] Installing with --prefix staging baked Exec=...-staging into .desktop
+    share/applications uses Exec=clm; DBus/systemd keep the prefix path.
+[x] Vendored gtk4-layer-shell RUNPATH=.zig-cache breaks the launcher;
+    addRPathSpecial $ORIGIN/../lib when not using the system library.
+[x] Restarting the GUI without tmux remote profile drops mac mini SSH
+    quitNow calls detachRemotes(); window X still closeRemoteWindow.
+
+

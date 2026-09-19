@@ -24,6 +24,9 @@ const MainReturn = switch (build_config.artifact) {
 };
 
 pub fn main() !MainReturn {
+    if (comptime builtin.os.tag == .linux and build_config.artifact == .exe) {
+        if (try @import("control/client.zig").run()) return;
+    }
     // We first start by initializing our global state. This will setup
     // process-level state we need to run the terminal. The reason we use
     // a global is because the C API needs to be able to access this state;
@@ -44,7 +47,7 @@ pub fn main() !MainReturn {
             error.InvalidAction => try stderr.print(
                 "Error: unknown CLI action specified. CLI actions are specified with\n" ++
                     "the '+' character.\n\n" ++
-                    "All valid CLI actions can be listed with `ghostty +help`\n",
+                    "All valid CLI actions can be listed with `clm +help`\n",
                 .{},
             ),
 

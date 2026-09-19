@@ -164,6 +164,42 @@ pub fn SplitTree(comptime V: type) type {
             };
         }
 
+        /// Return a tree with one leaf view replaced while preserving layout,
+        /// ratios, and zoom state. This is used by pane surface tabs: changing
+        /// the active tab must not rebuild or restart either terminal.
+        pub fn replace(
+            self: *const Self,
+            gpa: Allocator,
+            at: Node.Handle,
+            view: *View,
+        ) Allocator.Error!Self {
+            assert(at.idx() < self.nodes.len);
+            assert(self.nodes[at.idx()] == .leaf);
+            var arena = ArenaAllocator.init(gpa);
+            errdefer arena.deinit();
+            const alloc = arena.allocator();
+            const nodes = try alloc.alloc(Node, self.nodes.len);
+            var initialized: usize = 0;
+            errdefer for (nodes[0..initialized]) |node| switch (node) {
+                .leaf => |existing| viewUnref(existing, gpa),
+                .split => {},
+            };
+            for (self.nodes, 0..) |node, index| {
+                nodes[index] = if (index == at.idx())
+                    .{ .leaf = try viewRef(view, gpa) }
+                else switch (node) {
+                    .leaf => |existing| .{ .leaf = try viewRef(existing, gpa) },
+                    .split => |branch| .{ .split = branch },
+                };
+                initialized += 1;
+            }
+            return .{
+                .arena = arena,
+                .nodes = nodes,
+                .zoomed = self.zoomed,
+            };
+        }
+
         /// Returns true if this is an empty tree.
         pub fn isEmpty(self: *const Self) bool {
             // An empty tree has no nodes.
@@ -2170,6 +2206,34 @@ test "SplitTree: resize" {
             \\
         );
     }
+}
+
+test "SplitTree: replace leaf preserves layout and zoom" {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+    var a: TestView = .{ .label = "A" };
+    var left = try TestTree.init(alloc, &a);
+    defer left.deinit();
+    var b: TestView = .{ .label = "B" };
+    var right = try TestTree.init(alloc, &b);
+    defer right.deinit();
+    var tree = try left.split(alloc, .root, .right, 0.3, &right);
+    defer tree.deinit();
+
+    var iterator = tree.iterator();
+    _ = iterator.next().?;
+    const target = iterator.next().?.handle;
+    tree.zoom(target);
+    var c: TestView = .{ .label = "C" };
+    var replaced = try tree.replace(alloc, target, &c);
+    defer replaced.deinit();
+
+    try testing.expectEqual(target, replaced.zoomed.?);
+    try testing.expectEqual(tree.nodes[0].split.ratio, replaced.nodes[0].split.ratio);
+    var result = replaced.iterator();
+    try testing.expectEqualStrings("B", result.next().?.view.label);
+    try testing.expectEqualStrings("C", result.next().?.view.label);
+    try testing.expect(result.next() == null);
 }
 
 test "SplitTree: clone empty tree" {

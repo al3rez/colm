@@ -2,10 +2,7 @@ using Gtk 4.0;
 using Adw 1;
 
 template $GhosttyWindow: Adw.ApplicationWindow {
-  styles [
-    "window",
-  ]
-
+  styles ["window", "colm-window"]
   close-request => $close_request();
   realize => $realize();
   notify::config => $notify_config();
@@ -14,310 +11,278 @@ template $GhosttyWindow: Adw.ApplicationWindow {
   notify::maximized => $notify_maximized();
   notify::quick-terminal => $notify_quick_terminal();
   notify::scale-factor => $notify_scale_factor();
-  default-width: 800;
-  default-height: 600;
-  // GTK4 grabs F10 input by default to focus the menubar icon. We want
-  // to disable this so that terminal programs can capture F10 (such as htop)
+  default-width: 1280;
+  default-height: 800;
   handle-menubar-accel: false;
 
-  content: Adw.TabOverview tab_overview {
-    create-tab => $overview_create_tab();
-    notify::open => $overview_notify_open();
-    view: tab_view;
-    enable-new-tab: true;
-    // Disable the title buttons (close, maximize, minimize, ...)
-    // *inside* the tab overview if CSDs are disabled.
-    // We do spare the search button, though.
-    show-start-title-buttons: bind template.decorated;
-    show-end-title-buttons: bind template.decorated;
+  content: Gtk.Overlay {
+    Adw.OverlaySplitView {
+      min-sidebar-width: 200;
+      max-sidebar-width: 300;
+      sidebar-width-fraction: 0.19;
 
-    Adw.ToolbarView toolbar {
-      top-bar-style: bind template.toolbar-style;
-      bottom-bar-style: bind template.toolbar-style;
+      sidebar: Adw.ToolbarView {
+        styles ["colm-sidebar"]
+        [top]
+        Adw.HeaderBar {
+          show-start-title-buttons: false;
+          show-end-title-buttons: false;
+          title-widget: Gtk.Box {};
+          [start]
+          Gtk.Button {
+            icon-name: "list-add-symbolic";
+            action-name: "win.new-tab";
+            tooltip-text: _("New workspace");
+            styles ["flat"]
+          }
+          [end]
+          Gtk.Box {
+            spacing: 2;
+            Gtk.Button {
+              icon-name: "view-grid-symbolic";
+              action-name: "win.toggle-column-overview";
+              tooltip-text: _("Column overview");
+              styles ["flat"]
+            }
+            Gtk.MenuButton {
+              icon-name: "view-more-symbolic";
+              menu-model: workspace_menu;
+              tooltip-text: _("Workspace menu");
+              styles ["flat"]
+            }
+          }
+        }
 
-      [top]
-      Adw.HeaderBar {
-        visible: bind template.headerbar-visible;
+        Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          vscrollbar-policy: automatic;
+          overlay-scrolling: true;
+          vexpand: true;
+          Gtk.GestureClick {
+            button: 1;
+            propagation-phase: capture;
+            pressed => $workspace_background_pressed();
+          }
+          Gtk.ListBox workspace_list {
+            margin-top: 2;
+            styles ["navigation-sidebar", "workspace-list"]
+            selection-mode: single;
+            activate-on-single-click: true;
+            row-selected => $workspace_selected();
+          }
+        }
+      };
 
-        title-widget: Adw.WindowTitle {
-          title: bind template.title;
-          // Blueprint auto-formatter won't let me split this into multiple
-          // lines. Let me explain myself. All parameters to a closure are used
-          // as notifications to recompute the value of the closure. All
-          // elements of a property chain are also subscribed to for changes.
-          // This one long, ugly line saves us from manually building up this
-          // massive notify chain in code.
-          subtitle: bind $computed_subtitle(template.config, tab_view.selected-page.child as <$GhosttyTab>.active-surface as <$GhosttySurface>.pwd) as <string>;
+      content: Adw.OverlaySplitView right_sidebar {
+        sidebar-position: end;
+        min-sidebar-width: 260;
+        max-sidebar-width: 360;
+        sidebar-width-fraction: 0.24;
+        collapsed: true;
+        pin-sidebar: false;
+        show-sidebar: false;
+
+        sidebar: Adw.ToolbarView right_sidebar_panel {
+          styles ["colm-sidebar"]
+          [top]
+          Adw.HeaderBar {
+            show-start-title-buttons: false;
+            show-end-title-buttons: false;
+            title-widget: Gtk.Label right_sidebar_title {
+              label: _("Activity");
+              styles ["heading"]
+            };
+            [end]
+            Gtk.Button {
+              icon-name: "window-close-symbolic";
+              action-name: "win.hide-right-sidebar";
+              tooltip-text: _("Close sidebar");
+              styles ["flat"]
+            }
+          }
+          Gtk.ScrolledWindow {
+            hscrollbar-policy: never;
+            vscrollbar-policy: automatic;
+            vexpand: true;
+            Gtk.ListBox activity_list {
+              margin-top: 8;
+              margin-bottom: 8;
+              margin-start: 8;
+              margin-end: 8;
+              selection-mode: none;
+              styles ["boxed-list"]
+            }
+          }
         };
 
-        [start]
-        Adw.SplitButton {
-          clicked => $new_tab();
-          icon-name: "tab-new-symbolic";
-          tooltip-text: _("New Tab");
-          dropdown-tooltip: _("New Split");
-          menu-model: split_menu;
-          can-focus: false;
-          focus-on-click: false;
+        content: Adw.ToolbarView toolbar {
+        top-bar-style: flat;
+        [top]
+        Adw.HeaderBar {
+          visible: bind template.headerbar-visible;
+          show-start-title-buttons: false;
+          title-widget: Adw.WindowTitle {
+            title: bind template.title;
+            subtitle: bind $computed_subtitle(template.config, tab_view.selected-page.child as <$GhosttyTab>.active-surface as <$GhosttySurface>.pwd) as <string>;
+          };
+          [start]
+          Gtk.Button {
+            icon-name: "list-add-symbolic";
+            action-name: "win.split-right";
+            tooltip-text: _("New terminal · Ctrl+Shift+T");
+            styles ["flat"]
+          }
+          [end]
+          Gtk.Box {
+            spacing: 2;
+            Gtk.Button {
+              icon-name: "preferences-system-notifications-symbolic";
+              action-name: "win.show-activity";
+              tooltip-text: _("Activity and notifications");
+              styles ["flat"]
+            }
+            Gtk.MenuButton {
+              notify::active => $notify_menu_active();
+              icon-name: "open-menu-symbolic";
+              popover: Gtk.PopoverMenu main_popover {
+                menu-model: main_menu;
+              };
+              tooltip-text: _("Main menu");
+            }
+          }
         }
 
-        [end]
         Gtk.Box {
-          Gtk.ToggleButton {
-            icon-name: "view-grid-symbolic";
-            tooltip-text: _("View Open Tabs");
-            active: bind tab_overview.open bidirectional;
-            can-focus: false;
-            focus-on-click: false;
-          }
-
-          Gtk.MenuButton {
-            notify::active => $notify_menu_active();
-            icon-name: "open-menu-symbolic";
-            menu-model: main_menu;
-            tooltip-text: _("Main Menu");
-            can-focus: false;
-          }
-        }
-      }
-
-      [top]
-      Adw.TabBar tab_bar {
-        autohide: bind template.tabs-autohide;
-        expand-tabs: bind template.tabs-wide;
-        view: tab_view;
-        visible: bind template.tabs-visible;
-
-        [start]
-        Gtk.Box {
-          orientation: horizontal;
-          visible: bind $titlebar_style_is_tabs(template.titlebar-style) as <bool>;
-
-          Gtk.WindowControls {
-            side: start;
-          }
-
-          Adw.SplitButton {
-            styles [
-              "flat",
-            ]
-
-            clicked => $new_tab();
-            icon-name: "tab-new-symbolic";
-            tooltip-text: _("New Tab");
-            dropdown-tooltip: _("New Split");
-            menu-model: split_menu;
-            can-focus: false;
-            focus-on-click: false;
+          orientation: vertical;
+          $GhosttyDebugWarning { visible: bind template.debug; }
+          Adw.ToastOverlay toast_overlay {
+            vexpand: true;
+            Adw.TabView tab_view {
+              notify::n-pages => $notify_n_pages();
+              notify::selected-page => $notify_selected_page();
+              close-page => $close_page();
+              page-attached => $page_attached();
+              page-detached => $page_detached();
+              create-window => $tab_create_window();
+              setup-menu => $setup_tab_menu();
+              menu-model: tab_context_menu;
+              shortcuts: none;
+            }
           }
         }
+      };
+      };
+    }
 
-        [end]
-        Gtk.Box {
-          orientation: horizontal;
-          visible: bind $titlebar_style_is_tabs(template.titlebar-style) as <bool>;
+    [overlay]
+    Gtk.Revealer column_overview {
+      styles ["column-overview"]
+      transition-type: crossfade;
+      reveal-child: false;
+      visible: false;
 
-          Gtk.ToggleButton {
-            styles [
-              "flat",
-            ]
-
-            icon-name: "view-grid-symbolic";
-            tooltip-text: _("View Open Tabs");
-            active: bind tab_overview.open bidirectional;
-            can-focus: false;
-            focus-on-click: false;
+      Adw.ToolbarView column_overview_view {
+        [top]
+        Adw.HeaderBar {
+          [start]
+          Gtk.ToggleButton column_overview_search_button {
+            icon-name: "edit-find-symbolic";
+            tooltip-text: _("Search Columns");
           }
 
-          Gtk.MenuButton {
-            styles [
-              "flat",
-            ]
-
-            notify::active => $notify_menu_active();
-            icon-name: "open-menu-symbolic";
-            menu-model: main_menu;
-            tooltip-text: _("Main Menu");
-            can-focus: false;
-          }
-
-          Gtk.WindowControls {
-            side: end;
-          }
-        }
-      }
-
-      Box {
-        orientation: vertical;
-
-        $GhosttyDebugWarning {
-          visible: bind template.debug;
+          title-widget: Adw.WindowTitle column_overview_title {
+            styles ["numeric"]
+          };
         }
 
-        Adw.ToastOverlay toast_overlay {
-          Adw.TabView tab_view {
-            notify::n-pages => $notify_n_pages();
-            notify::selected-page => $notify_selected_page();
-            close-page => $close_page();
-            page-attached => $page_attached();
-            page-detached => $page_detached();
-            create-window => $tab_create_window();
-            setup-menu => $setup_tab_menu();
-            menu-model: tab_context_menu;
-            shortcuts: none;
+        [top]
+        Gtk.SearchBar column_overview_search_bar {
+          search-mode-enabled: bind column_overview_search_button.active bidirectional;
+          key-capture-widget: column_overview_view;
+
+          Adw.Clamp {
+            hexpand: true;
+            maximum-size: 400;
+
+            Gtk.SearchEntry column_overview_search {
+              hexpand: true;
+              placeholder-text: _("Search columns");
+              search-changed => $column_overview_search_changed();
+            }
           }
         }
+
+        content: Gtk.Overlay {
+          vexpand: true;
+
+          Gtk.ScrolledWindow {
+            hscrollbar-policy: never;
+
+            Gtk.FlowBox column_overview_grid {
+              valign: start;
+              halign: center;
+              selection-mode: none;
+              activate-on-single-click: true;
+              child-activated => $column_overview_child_activated();
+              column-spacing: 5;
+              row-spacing: 5;
+              margin-top: 16;
+              margin-bottom: 16;
+              margin-start: 16;
+              margin-end: 16;
+              max-children-per-line: 8;
+            }
+          }
+
+          [overlay]
+          Gtk.Button column_overview_new {
+            halign: center;
+            valign: end;
+            clicked => $column_overview_new_clicked();
+            styles ["pill", "suggested-action", "new-tab-button"]
+
+            Adw.ButtonContent {
+              icon-name: "tab-new-symbolic";
+              label: _("New Column");
+            }
+          }
+        };
       }
     }
   };
 }
 
-menu split_menu {
-  item {
-    label: _("Split Up");
-    action: "win.split-up";
+menu main_menu {
+  section {
+    item { custom: "appearance-scheme"; }
   }
-
-  item {
-    label: _("Split Down");
-    action: "win.split-down";
+  section {
+    item { label: _("New Terminal"); action: "win.split-right"; }
+    item { label: _("Close Terminal"); action: "win.close-terminal"; }
+    item { label: _("New Workspace"); action: "win.new-tab"; }
+    item { label: _("Rename Workspace…"); action: "win.prompt-tab-title"; }
+    item { label: _("New Window"); action: "win.new-window"; }
   }
-
-  item {
-    label: _("Split Left");
-    action: "win.split-left";
+  section {
+    item { label: _("Copy"); action: "win.copy"; }
+    item { label: _("Paste"); action: "win.paste"; }
+    item { label: _("Command Palette"); action: "win.toggle-command-palette"; }
   }
-
-  item {
-    label: _("Split Right");
-    action: "win.split-right";
+  section {
+    item { label: _("Settings…"); action: "win.appearance"; }
+    item { label: _("Open Configuration"); action: "app.open-config"; }
+    item { label: _("Reload Configuration"); action: "app.reload-config"; }
+    item { label: _("About Colm"); action: "win.about"; }
   }
 }
 
-menu main_menu {
-  section {
-    item {
-      label: _("Copy");
-      action: "win.copy";
-    }
-
-    item {
-      label: _("Paste");
-      action: "win.paste";
-    }
-  }
-
-  section {
-    item {
-      label: _("New Window");
-      action: "win.new-window";
-    }
-
-    item {
-      label: _("Close Window");
-      action: "win.close";
-    }
-  }
-
-  section {
-    item {
-      label: _("Change Tab Title…");
-      action: "win.prompt-tab-title";
-    }
-
-    item {
-      label: _("New Tab");
-      action: "win.new-tab";
-    }
-
-    item {
-      label: _("Close Tab");
-      action: "win.close-tab";
-      target: "this";
-    }
-  }
-
-  section {
-    submenu {
-      label: _("Split");
-
-      item {
-        label: _("Change Title…");
-        action: "win.prompt-surface-title";
-      }
-
-      item {
-        label: _("Split Up");
-        action: "win.split-up";
-      }
-
-      item {
-        label: _("Split Down");
-        action: "win.split-down";
-      }
-
-      item {
-        label: _("Split Left");
-        action: "win.split-left";
-      }
-
-      item {
-        label: _("Split Right");
-        action: "win.split-right";
-      }
-    }
-  }
-
-  section {
-    item {
-      label: _("Clear");
-      action: "win.clear";
-    }
-
-    item {
-      label: _("Reset");
-      action: "win.reset";
-    }
-  }
-
-  section {
-    item {
-      label: _("Command Palette");
-      action: "win.toggle-command-palette";
-    }
-
-    item {
-      label: _("Terminal Inspector");
-      action: "win.toggle-inspector";
-    }
-
-    item {
-      label: _("Open Configuration");
-      action: "app.open-config";
-    }
-
-    item {
-      label: _("Reload Configuration");
-      action: "app.reload-config";
-    }
-  }
-
-  section {
-    item {
-      label: _("About Ghostty");
-      action: "win.about";
-    }
-
-    item {
-      label: _("Quit");
-      action: "app.quit";
-    }
-  }
+menu workspace_menu {
+  item { label: _("New Workspace…"); action: "win.new-tab"; }
+  item { label: _("Rename Workspace…"); action: "win.prompt-tab-title"; }
+  item { label: _("Close Workspace"); action: "win.close-tab"; target: "this"; }
 }
 
 menu tab_context_menu {
-  item {
-    label: _("Change Tab Title…");
-    action: "win.prompt-context-tab-title";
-  }
+  item { label: _("Rename Workspace…"); action: "win.prompt-context-tab-title"; }
+  item { label: _("Close Workspace"); action: "win.close-tab"; target: "this"; }
 }

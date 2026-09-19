@@ -574,6 +574,7 @@ fn addGtkNg(
             .{ "gio", "gio2" },
             .{ "glib", "glib2" },
             .{ "gobject", "gobject2" },
+            .{ "gsk", "gsk4" },
             .{ "gtk", "gtk4" },
             .{ "xlib", "xlib2" },
         };
@@ -585,6 +586,8 @@ fn addGtkNg(
 
     step.linkSystemLibrary2("gtk4", dynamic_link_opts);
     step.linkSystemLibrary2("libadwaita-1", dynamic_link_opts);
+    step.linkSystemLibrary2("webkitgtk-6.0", dynamic_link_opts);
+    step.linkSystemLibrary2("javascriptcoregtk-6.0", dynamic_link_opts);
 
     if (self.config.x11) {
         step.linkSystemLibrary2("X11", dynamic_link_opts);
@@ -676,7 +679,11 @@ fn addGtkNg(
                 const shared_lib = gtk4_layer_shell.artifact("gtk4-layer-shell");
                 b.installArtifact(shared_lib);
                 step.linkLibrary(shared_lib);
+                // Installed clm lives in prefix/bin; the shared lib in prefix/lib.
+                // Without this, RUNPATH points at .zig-cache and the launcher dies.
+                step.root_module.addRPathSpecial("$ORIGIN/../lib");
             }
+
         }
 
         step.linkSystemLibrary2("wayland-client", dynamic_link_opts);

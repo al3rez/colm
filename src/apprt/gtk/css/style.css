@@ -157,27 +157,356 @@ label.resize-overlay {
   margin-right: 8px;
 }
 
-/*
- * Splits
- */
+.colm-sidebar {
+  background-color: @sidebar_bg_color;
+}
 
-.window .split paned > separator {
-  background-color: rgba(250, 250, 250, 1);
-  /* after GTK 4.16 is a requirement, switch to the following: */
-  /* background-color: color-mix(in srgb, var(--window-bg-color), transparent 0%); */
-  background-clip: content-box;
-
-  /* This works around the oversized drag area for the right side of GtkPaned.
-   *
-   * Upstream Gtk issue:
-   * https://gitlab.gnome.org/GNOME/gtk/-/issues/4484#note_2362002
-   *
-   * Ghostty issue:
-   * https://github.com/ghostty-org/ghostty/issues/3020
-   *
-   * Without this, it's not possible to select the first character on the
-   * right-hand side of a split.
-   */
-  margin: 0;
+.workspace-list {
+  background: transparent;
   padding: 0;
+}
+
+.workspace-list > row {
+  min-height: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin: 0 6px 2px;
+}
+
+.workspace-list > row:selected {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+.workspace-title {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* cmux row tiers: description 10.5px, notification 10px, status 10px
+ * (SidebarWorkspaceRowCellView.configure / configureMetadata). */
+.workspace-preview {
+  opacity: 0.85;
+}
+
+.workspace-description {
+  font-size: 10.5px;
+}
+
+.workspace-notification {
+  font-size: 10px;
+}
+
+.workspace-status {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+.workspace-status-icon {
+  font-size: 9px;
+  opacity: 0.85;
+}
+
+button.workspace-status-toggle {
+  min-height: 0;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+/* cmux location parity: monospaced branch/path line at 75% strength. */
+
+.workspace-log {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Task status glyphs are symbolic icons (colm-task-*-symbolic), rendered
+ * by the icon renderer like the pin — CSS-drawn rings on a 9px circle
+ * always alias (corner seams / uneven arcs) at 1x scale. Symbolic
+ * recoloring follows the row's text color automatically. */
+image.workspace-task.unset {
+  opacity: 0.4;
+}
+
+button.workspace-task-current {
+  font-weight: 600;
+}
+
+.workspace-extras {
+  font-size: 11px;
+}
+
+.workspace-todo {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+linkbutton.workspace-pr,
+linkbutton.workspace-port {
+  padding: 0;
+  min-height: 0;
+}
+
+.workspace-list > row.workspace-done {
+  opacity: 0.45;
+}
+
+.workspace-list > row.workspace-multi {
+  outline: 1px solid #4c8dff;
+  outline-offset: -1px;
+}
+
+.workspace-list > row .workspace-close {
+  opacity: 0;
+  min-width: 16px;
+  min-height: 16px;
+  padding: 0;
+}
+
+.workspace-list > row:hover .workspace-close {
+  opacity: 1;
+}
+
+.workspace-location {
+  font-family: monospace;
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+.workspace-unread {
+  min-width: 16px;
+  min-height: 16px;
+  padding: 0 2px;
+  border-radius: 999px;
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.workspace-list > row:selected .workspace-unread {
+  background-color: alpha(@accent_fg_color, 0.22);
+}
+
+.workspace-glyph {
+  min-width: 13px;
+  min-height: 13px;
+}
+
+.workspace-cloud {
+  min-width: 13px;
+  min-height: 13px;
+}
+
+.workspace-trailing {
+  min-width: 16px;
+  min-height: 16px;
+}
+
+.column-canvas {
+  padding: 12px;
+}
+
+.column-card {
+  background-color: @view_bg_color;
+  border: 1px solid alpha(@window_fg_color, 0.12);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.browser-pane {
+  background-color: @view_bg_color;
+}
+
+.browser-message {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.column-card.active {
+  border-color: @accent_color;
+}
+
+/* cmux AttentionFlashRouting: unfocused panes with unread agent
+ * notifications get a blue ring. Focused pane stays .active only. */
+.column-card.needs-attention {
+  border-color: #4c8dff;
+  box-shadow: 0 0 0 2px #4c8dff;
+}
+
+@keyframes pane-attention-flash {
+  0% {
+    box-shadow: 0 0 0 2px #4c8dff;
+  }
+  50% {
+    box-shadow: 0 0 0 4px #4c8dff;
+  }
+  100% {
+    box-shadow: 0 0 0 2px #4c8dff;
+  }
+}
+
+.column-card.needs-attention.pane-flash {
+  animation: pane-attention-flash 0.45s ease-out 2;
+}
+
+/* Column overview: 1:1 translation of libadwaita's AdwTabOverview and
+ * AdwTabThumbnail stylesheet (_tab-view.scss), for workspace columns. */
+.column-overview {
+  color: var(--overview-fg-color);
+  background-color: var(--overview-bg-color);
+}
+
+.column-overview flowboxchild {
+  padding: 0;
+  border-radius: 16px; /* $card_radius + 4 */
+}
+
+.column-overview flowboxchild:focus-visible .card {
+  outline: 2px solid alpha(@accent_color, 0.5);
+  outline-offset: 2px;
+}
+
+.column-thumbnail .card {
+  border-radius: 12px;
+  background: none;
+  color: inherit;
+}
+
+.column-thumbnail .card picture {
+  outline: 1px solid alpha(currentColor, 0.1);
+  outline-offset: -1px;
+  border-radius: 12px;
+}
+
+.column-thumbnail .icon-title-box {
+  border-spacing: 6px;
+}
+
+.column-thumbnail button {
+  padding: 0;
+  border-radius: 99px;
+  background: none;
+  box-shadow: none;
+}
+
+.column-thumbnail button:hover,
+.column-thumbnail button:active {
+  background: none;
+  box-shadow: none;
+}
+
+.column-thumbnail button > image {
+  margin: 6px;
+  background-color: color-mix(
+    in srgb,
+    var(--thumbnail-bg-color) 75%,
+    transparent
+  );
+  min-width: 24px;
+  min-height: 24px;
+  border-radius: 9999px;
+}
+
+.column-thumbnail button:hover > image {
+  background-color: color-mix(
+    in srgb,
+    var(--thumbnail-bg-color) 67.5%,
+    currentColor 7.5%
+  );
+}
+
+.column-thumbnail button:active > image {
+  background-color: color-mix(
+    in srgb,
+    var(--thumbnail-bg-color) 60%,
+    currentColor 15%
+  );
+}
+
+.column-overview .new-tab-button {
+  margin: 18px;
+}
+
+/*
+ * Appearance preferences
+ */
+.appearance-scheme-switcher {
+  margin: 8px;
+}
+
+/* Ptyxis-style: ring via inset box-shadow + content-box background,
+ * never border on a fully-rounded box (seams at cardinal points). */
+button.appearance-scheme {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 1px;
+  border-radius: 9999px;
+  background-clip: content-box;
+  box-shadow: inset 0 0 0 1px alpha(@window_fg_color, 0.25);
+}
+
+button.appearance-scheme:checked {
+  box-shadow: inset 0 0 0 2px @accent_color;
+}
+
+button.appearance-system {
+  background: linear-gradient(135deg, #fafafa 50%, #242424 50%);
+}
+
+button.appearance-light {
+  background: #fafafa;
+}
+
+button.appearance-dark {
+  background: #242424;
+}
+
+button.appearance-scheme image {
+  color: white;
+  background: @accent_bg_color;
+  border-radius: 50%;
+  padding: 2px;
+  margin: 7px;
+}
+
+.appearance-gallery > flowboxchild {
+  padding: 0;
+}
+
+button.appearance-theme-card {
+  padding: 0;
+  border-radius: 12px;
+  border: 2px solid alpha(@window_fg_color, 0.15);
+  box-shadow: 0 1px 3px alpha(black, 0.12);
+}
+
+button.appearance-theme-card:hover {
+  border-color: alpha(@accent_color, 0.65);
+}
+
+button.appearance-theme-card:checked {
+  border-color: @accent_color;
+  box-shadow: 0 0 0 1px @accent_color;
+}
+
+.appearance-theme-preview {
+  min-width: 164px;
+  padding: 12px;
+}
+
+.appearance-swatch {
+  min-height: 18px;
+  border-radius: 5px;
+}
+
+.appearance-theme-check {
+  color: white;
+  background-color: @accent_bg_color;
+  border-radius: 50%;
+  padding: 2px;
 }

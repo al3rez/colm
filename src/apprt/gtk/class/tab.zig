@@ -259,6 +259,10 @@ pub const Tab = extern struct {
         priv.title_override = null;
         if (title) |v| priv.title_override = glib.ext.dupeZ(u8, v);
         self.as(gobject.Object).notifyByPspec(properties.@"title-override".impl.param_spec);
+        @import("../automation.zig").sessionChanged();
+    }
+    pub fn getTitleOverride(self: *Self) ?[:0]const u8 {
+        return self.private().title_override;
     }
     fn titleDialogSet(
         _: *TitleDialog,
@@ -325,6 +329,7 @@ pub const Tab = extern struct {
     // Virtual methods
 
     fn dispose(self: *Self) callconv(.c) void {
+        @import("../automation.zig").workspaceDisposing(self);
         const priv = self.private();
         if (priv.config) |v| {
             v.unref();
@@ -494,7 +499,7 @@ pub const Tab = extern struct {
         // otherwise the overridden title if it exists, otherwise
         // the terminal title if it exists, otherwise a default string.
         const plain = plain: {
-            const default = "Ghostty";
+            const default = "Workspace";
             const config_title: ?[*:0]const u8 = title: {
                 const config = config_ orelse break :title null;
                 break :title config.get().title orelse null;

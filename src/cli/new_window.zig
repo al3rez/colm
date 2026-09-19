@@ -27,7 +27,7 @@ pub const Options = struct {
     _diagnostics: diagnostics.DiagnosticList = .{},
 
     /// Manual parse hook, collect all of the arguments after `+new-window`.
-    pub fn parseManuallyHook(self: *Options, alloc: Allocator, arg: []const u8, iter: anytype) (error{InvalidValue} || homedir.ExpandError || std.fs.Dir.RealPathAllocError || Allocator.Error)!bool {
+    pub fn parseManuallyHook(self: *Options, alloc: Allocator, arg: []const u8, iter: anytype) (error{ InvalidValue, ActionHelpRequested } || homedir.ExpandError || std.fs.Dir.RealPathAllocError || Allocator.Error)!bool {
         var e_seen: bool = std.mem.eql(u8, arg, "-e");
 
         // Include the argument that triggered the manual parse hook.
@@ -50,7 +50,10 @@ pub const Options = struct {
         return false;
     }
 
-    fn checkArg(self: *Options, alloc: Allocator, arg: []const u8) (error{InvalidValue} || homedir.ExpandError || std.fs.Dir.RealPathAllocError || Allocator.Error)!?[:0]const u8 {
+    fn checkArg(self: *Options, alloc: Allocator, arg: []const u8) (error{ InvalidValue, ActionHelpRequested } || homedir.ExpandError || std.fs.Dir.RealPathAllocError || Allocator.Error)!?[:0]const u8 {
+        // The manual pass-through hook runs before the generic help handler.
+        // Never forward help as configuration and accidentally open a window.
+        if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) return Action.help_error;
         if (lib.cutPrefix(u8, arg, "--class=")) |rest| {
             self.class = try alloc.dupeZ(u8, std.mem.trim(u8, rest, &std.ascii.whitespace));
             return null;
@@ -85,16 +88,14 @@ pub const Options = struct {
 };
 
 /// The `new-window` will use native platform IPC to open up a new window in a
-/// running instance of Ghostty.
+/// running instance of Colm.
 ///
 /// If the `--class` flag is not set, the `new-window` command will try and
-/// connect to a running instance of Ghostty based on what optimizations the
-/// Ghostty CLI was compiled with. Otherwise the `new-window` command will try
-/// and contact a running Ghostty instance that was configured with the same
-/// `class` as was given on the command line.
+/// connect to the default Colm application ID. Otherwise it contacts the
+/// running instance configured with the same `class` as the command line.
 ///
 /// All of the arguments after the `+new-window` argument (except for the
-/// `--class` flag) will be sent to the remote Ghostty instance and will be
+/// `--class` flag) will be sent to the remote Colm instance and will be
 /// parsed as command line flags. These flags will override certain settings
 /// when creating the first surface in the new window. Currently, only
 /// `--working-directory`, `--command`, and `--title` are supported. `-e` will
@@ -104,39 +105,34 @@ pub const Options = struct {
 ///
 /// If `--working-directory` is found on the command line and is a relative
 /// path (i.e. doesn't start with `/`) it will be resolved to an absolute path
-/// relative to the current working directory that the `ghostty +new-window`
+/// relative to the current working directory that `clm +new-window`
 /// command is run from. `~/` prefixes will also be expanded to the user's home
 /// directory.
 ///
 /// If `--working-directory` is _not_ found on the command line, the working
-/// directory that `ghostty +new-window` is run from will be passed to Ghostty.
+/// directory that `clm +new-window` is run from will be passed to Colm.
 ///
-/// GTK uses an application ID to identify instances of applications. If Ghostty
-/// is compiled with release optimizations, the default application ID will be
-/// `com.mitchellh.ghostty`. If Ghostty is compiled with debug optimizations,
-/// the default application ID will be `com.mitchellh.ghostty-debug`.  The
-/// `class` configuration entry can be used to set up a custom application
-/// ID. The class name must follow the requirements defined [in the GTK
-/// documentation](https://docs.gtk.org/gio/type_func.Application.id_is_valid.html)
-/// or it will be ignored and Ghostty will use the default as defined above.
+/// GTK uses an application ID to identify instances of applications. The Linux
+/// release application ID is `io.github.al3rez.Colm`. The `class` configuration
+/// entry can select a custom application ID. It must satisfy the requirements
+/// [in the GTK documentation](https://docs.gtk.org/gio/type_func.Application.id_is_valid.html)
+/// or Colm will use its default ID.
 ///
-/// On GTK, D-Bus activation must be properly configured. Ghostty does not need
-/// to be running for this to open a new window, making it suitable for binding
-/// to keys in your window manager (if other methods for configuring global
-/// shortcuts are unavailable). D-Bus will handle launching a new instance
-/// of Ghostty if it is not already running. See the Ghostty website for
-/// information on properly configuring D-Bus activation.
+/// On GTK, D-Bus activation must be properly configured. Colm does not need to
+/// be running for this to open a new window, making it suitable for binding to
+/// window-manager shortcuts. Run the Colm desktop-registration installer after
+/// building; see README.md for installation and activation refresh commands.
 ///
 /// Only supported on GTK.
 ///
 /// Flags:
 ///
 ///   * `--class=<class>`: If set, open up a new window in a custom instance of
-///     Ghostty. The class must be a valid GTK application ID.
+///     Colm. The class must be a valid GTK application ID.
 ///
 ///   * `--command`: The command to be executed in the first surface of the new window.
 ///
-///   * `--working-directory=<directory>`: The working directory to pass to Ghostty.
+///   * `--working-directory=<directory>`: The working directory to pass to Colm.
 ///
 ///   * `--title`: A title that will override the title of the first surface in
 ///     the new window. The title override may be edited or removed later.

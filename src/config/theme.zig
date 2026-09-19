@@ -27,7 +27,7 @@ pub const Location = enum {
         return switch (self) {
             .user => user: {
                 const subdir = std.fs.path.join(arena_alloc, &.{
-                    "ghostty", "themes",
+                    if (builtin.os.tag == .linux) "colm" else "ghostty", "themes",
                 }) catch return error.OutOfMemory;
 
                 break :user internal_os.xdg.config(

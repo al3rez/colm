@@ -26,6 +26,7 @@ const cli = @import("../cli.zig");
 const conditional = @import("conditional.zig");
 const Conditional = conditional.Conditional;
 const file_load = @import("file_load.zig");
+const appearance = @import("appearance.zig");
 const formatterpkg = @import("formatter.zig");
 const themepkg = @import("theme.zig");
 const url = @import("url.zig");
@@ -548,18 +549,17 @@ language: ?[:0]const u8 = null,
 /// systems with case-sensitive filesystems. It is an error for a theme name to
 /// include path separators unless it is an absolute pathname.
 ///
-/// The first directory is the `themes` subdirectory of your Ghostty
-/// configuration directory. This is `$XDG_CONFIG_HOME/ghostty/themes` or
-/// `~/.config/ghostty/themes`.
+/// The first directory is the `themes` subdirectory of your configuration
+/// directory. On Linux this is `$XDG_CONFIG_HOME/colm/themes` or
+/// `~/.config/colm/themes`; on macOS the XDG subdirectory is `ghostty/themes`.
 ///
 /// The second directory is the `themes` subdirectory of the Ghostty resources
 /// directory. Ghostty ships with a multitude of themes that will be installed
 /// into this directory. On macOS, this list is in the
 /// `Ghostty.app/Contents/Resources/ghostty/themes` directory. On Linux, this
-/// list is in the `share/ghostty/themes` directory (wherever you installed the
-/// Ghostty "share" directory.
+/// list is in the `share/colm/themes` directory below your installation prefix.
 ///
-/// To see a list of available themes, run `ghostty +list-themes`.
+/// To see available themes on Linux, run `clm +list-themes`.
 ///
 /// A theme file is simply another Ghostty configuration file. They share
 /// the same syntax and same configuration options. A theme can set any valid
@@ -1498,7 +1498,7 @@ title: ?[:0]const u8 = null,
 /// The class name must follow the requirements defined [in the GTK
 /// documentation](https://docs.gtk.org/gio/type_func.Application.id_is_valid.html).
 ///
-/// The default is `com.mitchellh.ghostty`.
+/// The default on Linux is `io.github.al3rez.Colm`.
 ///
 /// This only affects GTK builds.
 class: ?[:0]const u8 = null,
@@ -1506,7 +1506,7 @@ class: ?[:0]const u8 = null,
 /// This controls the instance name field of the `WM_CLASS` X11 property when
 /// running under X11. It has no effect otherwise.
 ///
-/// The default is `ghostty`.
+/// The default on Linux is `column`.
 ///
 /// This only affects GTK builds.
 @"x11-instance-name": ?[:0]const u8 = null,
@@ -1930,7 +1930,10 @@ keybind: Keybinds = .{},
 /// left padding to 2 and the right padding to 4. If you want to set both
 /// paddings to the same value, you can use a single value. For example,
 /// `window-padding-x = 2` will set both paddings to 2.
-@"window-padding-x": WindowPadding = .{ .top_left = 2, .bottom_right = 2 },
+@"window-padding-x": WindowPadding = if (builtin.os.tag == .linux)
+    .{ .top_left = 14, .bottom_right = 14 }
+else
+    .{ .top_left = 2, .bottom_right = 2 },
 
 /// Vertical window padding. This applies padding between the terminal cells and
 /// the top and bottom window borders. The value is in points, meaning that it
@@ -1949,7 +1952,10 @@ keybind: Keybinds = .{},
 /// top padding to 2 and the bottom padding to 4. If you want to set both
 /// paddings to the same value, you can use a single value. For example,
 /// `window-padding-y = 2` will set both paddings to 2.
-@"window-padding-y": WindowPadding = .{ .top_left = 2, .bottom_right = 2 },
+@"window-padding-y": WindowPadding = if (builtin.os.tag == .linux)
+    .{ .top_left = 12, .bottom_right = 12 }
+else
+    .{ .top_left = 2, .bottom_right = 2 },
 
 /// The viewport dimensions are usually not perfectly divisible by the cell
 /// size. In this case, some extra padding on the end of a column and the bottom
@@ -2115,7 +2121,13 @@ keybind: Keybinds = .{},
 /// non-terminal windows within Ghostty.
 ///
 /// This is currently only supported on macOS and Linux.
-@"window-theme": WindowTheme = .auto,
+@"window-theme": WindowTheme = if (builtin.os.tag == .linux) .system else .auto,
+
+/// The GTK application color scheme: `system`, `light`, or `dark`.
+/// When unset, the existing `window-theme` setting determines the scheme.
+/// This is separate from matching window colors to the terminal and only
+/// applies on Linux.
+@"gtk-color-scheme": ?appearance.Scheme = null,
 
 /// The color space to use when interpreting terminal colors. "Terminal colors"
 /// refers to colors specified in your configuration and colors produced by
@@ -2453,7 +2465,7 @@ keybind: Keybinds = .{},
 
 /// When this is true, the default configuration file paths will be loaded.
 /// The default configuration file paths are currently only the XDG
-/// config path ($XDG_CONFIG_HOME/ghostty/config.ghostty).
+/// config path ($XDG_CONFIG_HOME/colm/config.ghostty on Linux).
 ///
 /// If this is false, the default configuration paths will not be loaded.
 /// This is targeted directly at using Ghostty from the CLI in a way
@@ -2657,7 +2669,7 @@ keybind: Keybinds = .{},
 /// GTK Wayland only.
 ///
 /// Available since: 1.2.0
-@"gtk-quick-terminal-namespace": [:0]const u8 = "ghostty-quick-terminal",
+@"gtk-quick-terminal-namespace": [:0]const u8 = "colm-quick-terminal",
 
 /// The screen where the quick terminal should show up.
 ///
@@ -3798,8 +3810,9 @@ pub fn deinit(self: *Config) void {
 ///   1. Defaults
 ///   2. XDG config dir
 ///   3. "Application Support" directory (macOS only)
-///   4. CLI flags
-///   5. Recursively defined configuration files
+///   4. Managed appearance preferences (Linux only)
+///   5. CLI flags
+///   6. Recursively defined configuration files
 ///
 pub fn load(alloc_gpa: Allocator) !Config {
     var result = try default(alloc_gpa);
@@ -3979,12 +3992,16 @@ fn writeConfigTemplate(path: []const u8) !void {
     const writer = &file_writer.interface;
     try writer.print(
         @embedFile("./config-template"),
-        .{ .path = path },
+        .{
+            .path = path,
+            .name = if (builtin.os.tag == .linux) "Colm" else "Ghostty",
+            .binary = if (builtin.os.tag == .linux) "clm" else "ghostty",
+        },
     );
 }
 
 /// Load configurations from the default configuration files. The default
-/// configuration file is at `$XDG_CONFIG_HOME/ghostty/config.ghostty`.
+/// configuration file on Linux is at `$XDG_CONFIG_HOME/colm/config.ghostty`.
 ///
 /// On macOS, `$HOME/Library/Application Support/$CFBundleIdentifier/`
 /// is also loaded.
@@ -4060,6 +4077,10 @@ pub fn loadDefaultFiles(self: *Config, alloc: Allocator) !void {
                 log.warn("error creating template config file err={}", .{err});
             };
         }
+    }
+
+    if (comptime builtin.os.tag == .linux) {
+        try appearance.loadConfig(alloc, self);
     }
 }
 
@@ -6573,12 +6594,7 @@ pub const Keybinds = struct {
             try self.set.put(
                 alloc,
                 .{ .key = .{ .unicode = 'n' }, .mods = .{ .ctrl = true, .shift = true } },
-                .{ .new_window = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'w' }, .mods = .{ .ctrl = true, .shift = true } },
-                .{ .close_surface = {} },
+                if (builtin.os.tag == .linux) .{ .new_tab = {} } else .{ .new_window = {} },
             );
             try self.set.put(
                 alloc,
@@ -6593,12 +6609,12 @@ pub const Keybinds = struct {
             try self.set.put(
                 alloc,
                 .{ .key = .{ .unicode = 't' }, .mods = .{ .ctrl = true, .shift = true } },
-                .{ .new_tab = {} },
+                if (builtin.os.tag == .linux) .{ .new_split = .right } else .{ .new_tab = {} },
             );
             try self.set.put(
                 alloc,
                 .{ .key = .{ .unicode = 'w' }, .mods = .{ .ctrl = true, .shift = true } },
-                .{ .close_tab = .this },
+                if (builtin.os.tag == .linux) .{ .close_surface = {} } else .{ .close_tab = .this },
             );
             try self.set.putFlags(
                 alloc,
@@ -6670,6 +6686,19 @@ pub const Keybinds = struct {
                 .{ .goto_split = .right },
                 .{ .performable = true },
             );
+
+            if (comptime builtin.os.tag == .linux) {
+                try self.set.put(
+                    alloc,
+                    .{ .key = .{ .physical = .arrow_left }, .mods = .{ .alt = true } },
+                    .{ .goto_split = .left },
+                );
+                try self.set.put(
+                    alloc,
+                    .{ .key = .{ .physical = .arrow_right }, .mods = .{ .alt = true } },
+                    .{ .goto_split = .right },
+                );
+            }
 
             // Resizing splits
             try self.set.putFlags(
@@ -6855,6 +6884,34 @@ pub const Keybinds = struct {
             .{ .key = .{ .unicode = 'p' }, .mods = inputpkg.ctrlOrSuper(.{ .shift = true }) },
             .toggle_command_palette,
         );
+
+        // Jump to latest unread (cmux ⌘⇧U) and mark-oldest + next (cmux ⌃⌘U).
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'u' }, .mods = inputpkg.ctrlOrSuper(.{ .shift = true }) },
+            .jump_unread,
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'u' }, .mods = .{ .ctrl = true, .super = true } },
+            .mark_oldest_unread,
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'o' }, .mods = inputpkg.ctrlOrSuper(.{ .shift = true }) },
+            .restore_previous_session,
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'g' }, .mods = .{ .ctrl = true, .super = true } },
+            .new_empty_group,
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'g' }, .mods = inputpkg.ctrlOrSuper(.{ .shift = true }) },
+            .group_selection,
+        );
+
 
         // Mac-specific keyboard bindings.
         if (comptime builtin.target.os.tag.isDarwin()) {

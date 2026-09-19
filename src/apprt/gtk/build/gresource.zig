@@ -8,8 +8,23 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 /// Prefix/appid for the gresource file.
-pub const prefix = "/com/mitchellh/ghostty";
-pub const app_id = "com.mitchellh.ghostty";
+pub const prefix = "/io/github/al3rez/Colm";
+pub const app_id = "io.github.al3rez.Colm";
+
+/// Full-color artwork, rasterized for native icon sizes.
+pub const icon_sizes = [_]u16{ 16, 24, 32, 48, 64, 96, 128, 192, 256, 512, 1024 };
+pub const icon_variants = [_][]const u8{ "", "-dark" };
+
+/// Symbolic status icons, recolored by GTK like any -symbolic icon.
+pub const symbolic_icons = [_][]const u8{
+    "colm-task-none",
+    "colm-task-filled",
+    "colm-task-blocked",
+    "colm-pin",
+};
+
+/// The path to the symbolic icon sources.
+pub const icons_path = "src/apprt/gtk/icons";
 
 /// The path to the Blueprint files. The folder structure is expected to be
 /// `{version}/{name}.blp` where `version` is the major and minor
@@ -18,12 +33,6 @@ pub const ui_path = "src/apprt/gtk/ui";
 
 /// The path to the CSS files.
 pub const css_path = "src/apprt/gtk/css";
-
-/// The possible icon sizes we'll embed into the gresource file.
-/// If any size doesn't exist then it will be an error. We could
-/// infer this completely from available files but we wouldn't be
-/// able to error when they don't exist that way.
-pub const icon_sizes: []const comptime_int = &.{ 16, 32, 128, 256, 512, 1024 };
 
 /// The blueprint files that we will embed into the gresource file.
 /// We can't look these up at runtime [easily] because we require the
@@ -46,7 +55,6 @@ pub const blueprints: []const Blueprint = &.{
     .{ .major = 1, .minor = 2, .name = "search-overlay" },
     .{ .major = 1, .minor = 2, .name = "key-state-overlay" },
     .{ .major = 1, .minor = 5, .name = "split-tree" },
-    .{ .major = 1, .minor = 5, .name = "split-tree-split" },
     .{ .major = 1, .minor = 2, .name = "surface" },
     .{ .major = 1, .minor = 5, .name = "surface-scrolled-window" },
     .{ .major = 1, .minor = 3, .name = "surface-child-exited" },
@@ -73,13 +81,18 @@ pub const Blueprint = struct {
 /// The list of filepaths that we depend on. Used for the build
 /// system to have proper caching.
 pub const file_inputs = deps: {
-    const total = (icon_sizes.len * 2) + blueprints.len + css.len;
+    const total = icon_sizes.len * icon_variants.len + symbolic_icons.len + blueprints.len + css.len;
     var deps: [total][]const u8 = undefined;
     var index: usize = 0;
-    for (icon_sizes) |size| {
-        deps[index] = std.fmt.comptimePrint("images/gnome/{d}.png", .{size});
-        deps[index + 1] = std.fmt.comptimePrint("images/gnome/{d}.png", .{size * 2});
-        index += 2;
+    for (icon_variants) |variant| {
+        for (icon_sizes) |size| {
+            deps[index] = std.fmt.comptimePrint("images/colm{s}/{d}.png", .{ variant, size });
+            index += 1;
+        }
+    }
+    for (symbolic_icons) |name| {
+        deps[index] = std.fmt.comptimePrint("{s}/{s}-symbolic.svg", .{ icons_path, name });
+        index += 1;
     }
     for (blueprints) |bp| {
         deps[index] = std.fmt.comptimePrint("{s}/{d}.{d}/{s}.blp", .{
@@ -166,48 +179,24 @@ pub fn main() !void {
     try stdout.end();
 }
 
-/// Generate the icon resources. This works by looking up all the icons
-/// specified by `icon_sizes` in `images/icons/`. They are asserted to exist
-/// by trying to access the file.
+/// Embed the default light icon and the alternative dark artwork.
 fn genIcons(writer: *std.Io.Writer) !void {
-    try writer.print(
-        \\  <gresource prefix="{s}/icons">
-        \\
-    , .{prefix});
-
-    const cwd = std.fs.cwd();
-    inline for (icon_sizes) |size| {
-        // 1x
-        {
-            const alias = std.fmt.comptimePrint("{d}x{d}", .{ size, size });
-            const source = std.fmt.comptimePrint("images/gnome/{d}.png", .{size});
-            try cwd.access(source, .{});
+    try writer.print("  <gresource prefix=\"{s}/icons\">\n", .{prefix});
+    for (icon_variants) |variant| {
+        for (icon_sizes) |size| {
             try writer.print(
-                \\    <file alias="{s}/apps/{s}.png">{s}</file>
-                \\
-            ,
-                .{ alias, app_id, source },
-            );
-        }
-
-        // 2x
-        {
-            const alias = std.fmt.comptimePrint("{d}x{d}@2", .{ size, size });
-            const source = std.fmt.comptimePrint("images/gnome/{d}.png", .{size * 2});
-            try cwd.access(source, .{});
-            try writer.print(
-                \\    <file alias="{s}/apps/{s}.png">{s}</file>
-                \\
-            ,
-                .{ alias, app_id, source },
+                "    <file alias=\"{d}x{d}/apps/{s}{s}.png\">images/colm{s}/{d}.png</file>\n",
+                .{ size, size, app_id, variant, variant, size },
             );
         }
     }
-
-    try writer.writeAll(
-        \\  </gresource>
-        \\
-    );
+    for (symbolic_icons) |name| {
+        try writer.print(
+            "    <file compressed=\"true\" alias=\"scalable/actions/{s}-symbolic.svg\">{s}/{s}-symbolic.svg</file>\n",
+            .{ name, icons_path, name },
+        );
+    }
+    try writer.writeAll("  </gresource>\n");
 }
 
 /// Generate the resources at the root prefix.

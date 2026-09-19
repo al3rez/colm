@@ -3229,6 +3229,17 @@ fn encodeKeyOpts(self: *const Surface) input.key_encode.Options {
     return opts;
 }
 
+/// Send an explicitly targeted protocol key without invoking application bindings.
+pub fn automationKey(self: *Surface, event: input.KeyEvent) !void {
+    if (self.readonly) return error.ReadOnly;
+    const request = try self.encodeKey(event, null) orelse return;
+    self.queueIo(switch (request) {
+        .small => |v| .{ .write_small = v },
+        .stable => |v| .{ .write_stable = v },
+        .alloc => |v| .{ .write_alloc = v },
+    }, .unlocked);
+}
+
 /// Sends text as-is to the terminal without triggering any keyboard
 /// protocol. This will treat the input text as if it was pasted
 /// from the clipboard so the same logic will be applied. Namely,
@@ -5501,6 +5512,37 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
                 .{ .title = title },
             );
         },
+
+        .jump_unread => return try self.rt_app.performAction(
+            .{ .surface = self },
+            .jump_unread,
+            {},
+        ),
+
+        .mark_oldest_unread => return try self.rt_app.performAction(
+            .{ .surface = self },
+            .mark_oldest_unread,
+            {},
+        ),
+
+        .restore_previous_session => return try self.rt_app.performAction(
+            .{ .surface = self },
+            .restore_previous_session,
+            {},
+        ),
+
+        .new_empty_group => return try self.rt_app.performAction(
+            .{ .surface = self },
+            .new_empty_group,
+            {},
+        ),
+
+        .group_selection => return try self.rt_app.performAction(
+            .{ .surface = self },
+            .group_selection,
+            {},
+        ),
+
 
         .clear_screen => {
             // This is a duplicate of some of the logic in termio.clearScreen

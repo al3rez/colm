@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const fs = std.fs;
 const Allocator = std.mem.Allocator;
 const args = @import("args.zig");
@@ -39,13 +40,13 @@ pub const Options = struct {
 /// multiple actions into separate commands.
 ///
 /// Examples:
-///   ghostty +ssh-cache                          # List all cached hosts
-///   ghostty +ssh-cache --host=example.com       # Check if host is cached
-///   ghostty +ssh-cache --add=example.com        # Manually add host to cache
-///   ghostty +ssh-cache --add=user@example.com   # Add user@host combination
-///   ghostty +ssh-cache --remove=example.com     # Remove host from cache
-///   ghostty +ssh-cache --clear                  # Clear entire cache
-///   ghostty +ssh-cache --expire-days=30         # Set custom expiration period
+///   clm +ssh-cache                          # List all cached hosts
+///   clm +ssh-cache --host=example.com        # Check if host is cached
+///   clm +ssh-cache --add=example.com         # Manually add host to cache
+///   clm +ssh-cache --add=user@example.com    # Add user@host combination
+///   clm +ssh-cache --remove=example.com      # Remove host from cache
+///   clm +ssh-cache --clear                   # Clear entire cache
+///   clm +ssh-cache --expire-days=30          # Set custom expiration period
 pub fn run(alloc_gpa: Allocator) !u8 {
     var arena = std.heap.ArenaAllocator.init(alloc_gpa);
     defer arena.deinit();
@@ -85,7 +86,7 @@ pub fn runInner(
     stderr: *std.Io.Writer,
 ) !u8 {
     // Setup our disk cache to the standard location
-    const cache_path = try DiskCache.defaultPath(alloc, "ghostty");
+    const cache_path = try DiskCache.defaultPath(alloc, if (builtin.os.tag == .linux) "colm" else "ghostty");
     const cache: DiskCache = .{ .path = cache_path };
 
     if (opts.clear) {

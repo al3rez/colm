@@ -577,6 +577,29 @@ pub const Action = union(enum) {
     /// and persists across focus changes within the tab.
     prompt_tab_title,
 
+    /// Jump to the pane with the most recent unread notification.
+    ///
+    /// Default: `ctrl+shift+u` (Linux) / `super+shift+u` (macOS).
+    jump_unread,
+
+    /// Mark the latest unread notification as the oldest-unread cursor
+    /// and jump to the next older unread notification.
+    ///
+    /// Default: `ctrl+super+u`.
+    mark_oldest_unread,
+
+    /// Restore the previous GUI session (workspaces, remotes, browser columns).
+    /// Default: `ctrl+shift+o` (Linux) / `super+shift+o` (macOS).
+    restore_previous_session,
+
+    /// Create a new empty workspace group.
+    /// Default: `ctrl+super+g`.
+    new_empty_group,
+
+    /// Group the current selection (or the current workspace).
+    /// Default: `ctrl+shift+g`.
+    group_selection,
+
     /// Set the title for the current focused surface.
     ///
     /// If the title is empty, the surface title is reset to an empty title.
@@ -1334,7 +1357,13 @@ pub const Action = union(enum) {
             .set_font_size,
             .prompt_surface_title,
             .prompt_tab_title,
+            .jump_unread,
+            .mark_oldest_unread,
+            .restore_previous_session,
+            .new_empty_group,
+            .group_selection,
             .set_surface_title,
+
             .set_tab_title,
             .clear_screen,
             .select_all,

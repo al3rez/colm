@@ -7,5 +7,6 @@ template $GhostttySurfaceScrolledWindow: Adw.Bin {
   Gtk.ScrolledWindow {
     hscrollbar-policy: never;
     vscrollbar-policy: bind $scrollbar_policy(template.config) as <Gtk.PolicyType>;
+    overlay-scrolling: true;
   }
 }

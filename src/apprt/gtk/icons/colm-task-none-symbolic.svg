@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Ring as an even-odd filled annulus: GTK's symbolic recoloring
+       forces fill on every element, so strokes cannot be used. -->
+  <path fill="#2e3436" fill-rule="evenodd" d="M 8 0 A 8 8 0 1 0 8 16 A 8 8 0 1 0 8 0 Z M 8 3 A 5 5 0 1 1 8 13 A 5 5 0 1 1 8 3 Z"/>
+</svg>

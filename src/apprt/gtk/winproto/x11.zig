@@ -43,10 +43,8 @@ pub const App = struct {
 
         const x11_program_name: [:0]const u8 = if (config.@"x11-instance-name") |pn|
             pn
-        else if (builtin.mode == .Debug)
-            "ghostty-debug"
         else
-            "ghostty";
+            "clm";
 
         // Set the X11 window class property (WM_CLASS) if are are on an X11
         // display.
@@ -61,9 +59,7 @@ pub const App = struct {
         //
         // This makes the property show up like so when using xprop:
         //
-        //     WM_CLASS(STRING) = "ghostty", "com.mitchellh.ghostty"
-        //
-        // Append "-debug" on both when using the debug build.
+        //     WM_CLASS(STRING) = "clm", "io.github.al3rez.Colm"
         glib.setPrgname(x11_program_name);
         gdk_x11.X11Display.setProgramClass(gdk_display, app_id);
 

@@ -349,6 +349,8 @@ pub fn init(b: *std.Build, appVersion: []const u8) !Config {
         "emit-docs",
         "Build and install auto-generated documentation (requires pandoc)",
     ) orelse emit_docs: {
+        // Colm does not install Ghostty-named manuals into a shared prefix.
+        if (target.result.os.tag == .linux) break :emit_docs false;
         // If we are emitting any other artifacts then we default to false.
         if (config.emit_bench or
             config.emit_test_exe or

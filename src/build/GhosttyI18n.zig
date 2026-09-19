@@ -16,8 +16,6 @@ steps: []*std.Build.Step,
 update_step: *std.Build.Step,
 
 pub fn init(b: *std.Build, cfg: *const Config) !GhosttyI18n {
-    _ = cfg;
-
     var steps: std.ArrayList(*std.Build.Step) = .empty;
     defer steps.deinit(b.allocator);
 
@@ -35,9 +33,9 @@ pub fn init(b: *std.Build, cfg: *const Config) !GhosttyI18n {
 
         try steps.append(b.allocator, &b.addInstallFile(
             msgfmt.captureStdOut(),
-            std.fmt.comptimePrint(
+            b.fmt(
                 "share/locale/{s}/LC_MESSAGES/{s}.mo",
-                .{ target_locale, domain },
+                .{ target_locale, if (cfg.target.result.os.tag == .linux) "io.github.al3rez.Colm" else domain },
             ),
         ).step);
     }

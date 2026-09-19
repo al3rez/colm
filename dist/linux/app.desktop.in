@@ -2,10 +2,10 @@
 Version=1.0
 Name=@NAME@
 Type=Application
-Comment=A terminal emulator
+Comment=Workspaces of horizontally scrolling terminals
 TryExec=@GHOSTTY@
 Exec=@GHOSTTY@ --gtk-single-instance=true
-Icon=com.mitchellh.ghostty
+Icon=@APPID@
 Categories=System;TerminalEmulator;
 Keywords=terminal;tty;pty;
 StartupNotify=true
@@ -19,7 +19,6 @@ X-TerminalArgAppId=--class=
 X-TerminalArgDir=--working-directory=
 X-TerminalArgHold=--wait-after-command
 DBusActivatable=true
-X-KDE-Shortcuts=Ctrl+Alt+T
 
 [Desktop Action new-window]
 Name=New Window

@@ -5,10 +5,33 @@ template $GhosttySplitTree: Box {
   notify::tree => $notify_tree();
   orientation: vertical;
 
-  Adw.Bin tree_bin {
+  EventControllerScroll {
+    propagation-phase: capture;
+    flags: both_axes;
+    scroll => $canvas_scroll();
+  }
+
+  ScrolledWindow canvas {
     visible: bind template.has-surfaces;
     hexpand: true;
     vexpand: true;
+    hscrollbar-policy: automatic;
+    vscrollbar-policy: never;
+    overlay-scrolling: true;
+
+    hadjustment: Adjustment {
+      changed => $canvas_changed();
+    };
+
+    child: Viewport {
+      scroll-to-focus: false;
+
+      child: Box columns {
+        orientation: horizontal;
+        spacing: 12;
+        styles ["column-canvas"]
+      };
+    };
   }
 
   // This could be a lot more visually pleasing but in practice this doesn't

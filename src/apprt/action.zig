@@ -343,6 +343,19 @@ pub const Action = union(Key) {
     /// otherwise the terminal-set title.
     copy_title_to_clipboard,
 
+    /// Jump to the pane with the most recent unread notification.
+    jump_unread,
+
+    mark_oldest_unread,
+
+    /// Restore the previous GUI session.
+    restore_previous_session,
+
+    /// Create a new empty workspace group.
+    new_empty_group,
+
+    /// Group the current workspace selection.
+    group_selection,
     /// Sync with: ghostty_action_tag_e
     pub const Key = enum(c_int) {
         quit,
@@ -410,6 +423,11 @@ pub const Action = union(Key) {
         search_selected,
         readonly,
         copy_title_to_clipboard,
+        jump_unread,
+        mark_oldest_unread,
+        restore_previous_session,
+        new_empty_group,
+        group_selection,
 
         test "ghostty.h Action.Key" {
             try lib.checkGhosttyHEnum(Key, "GHOSTTY_ACTION_");

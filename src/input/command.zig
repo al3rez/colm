@@ -415,27 +415,27 @@ fn actionCommands(action: Action.Key) []const Command {
 
         .new_tab => comptime &.{.{
             .action = .new_tab,
-            .title = "New Tab",
-            .description = "Open a new tab.",
+            .title = "New Workspace",
+            .description = "Open a workspace with its own terminal columns.",
         }},
 
         .move_tab => comptime &.{
             .{
                 .action = .{ .move_tab = -1 },
-                .title = "Move Tab Left",
-                .description = "Move the current tab to the left.",
+                .title = "Move Workspace Up",
+                .description = "Move the current workspace up in the sidebar.",
             },
             .{
                 .action = .{ .move_tab = 1 },
-                .title = "Move Tab Right",
-                .description = "Move the current tab to the right.",
+                .title = "Move Workspace Down",
+                .description = "Move the current workspace down in the sidebar.",
             },
         },
 
         .toggle_tab_overview => comptime &.{.{
             .action = .toggle_tab_overview,
-            .title = "Toggle Tab Overview",
-            .description = "Toggle the tab overview.",
+            .title = "Toggle Column Overview",
+            .description = "Show the columns in the active workspace.",
         }},
 
         .prompt_surface_title => comptime &.{.{
@@ -446,63 +446,74 @@ fn actionCommands(action: Action.Key) []const Command {
 
         .prompt_tab_title => comptime &.{.{
             .action = .prompt_tab_title,
-            .title = "Change Tab Title…",
-            .description = "Prompt for a new title for the current tab.",
+            .title = "Rename Workspace…",
+            .description = "Choose a name for the current workspace.",
         }},
+
+        .jump_unread => comptime &.{.{
+            .action = .jump_unread,
+            .title = "Jump to Latest Unread",
+            .description = "Focus the pane with the most recent unread notification.",
+        }},
+
+        .mark_oldest_unread => comptime &.{.{
+            .action = .mark_oldest_unread,
+            .title = "Jump to Next Unread",
+            .description = "Mark the latest unread as seen and jump to the next older unread notification.",
+        }},
+
+        .restore_previous_session => comptime &.{.{
+            .action = .restore_previous_session,
+            .title = "Reopen Previous Session",
+            .description = "Restore the last saved windows, workspaces, remotes, and browser columns.",
+        }},
+
+        .new_empty_group => comptime &.{.{
+            .action = .new_empty_group,
+            .title = "New Empty Group",
+            .description = "Create a new workspace and start a named sidebar group.",
+        }},
+
+        .group_selection => comptime &.{.{
+            .action = .group_selection,
+            .title = "Group Selected Workspaces",
+            .description = "Put the current selection (or this workspace) in a sidebar group.",
+        }},
+
 
         .new_split => comptime &.{
             .{
                 .action = .{ .new_split = .left },
-                .title = "Split Left",
-                .description = "Split the terminal to the left.",
+                .title = "New Terminal to the Left",
+                .description = "Insert a terminal column before the current one.",
             },
             .{
                 .action = .{ .new_split = .right },
-                .title = "Split Right",
-                .description = "Split the terminal to the right.",
-            },
-            .{
-                .action = .{ .new_split = .up },
-                .title = "Split Up",
-                .description = "Split the terminal up.",
-            },
-            .{
-                .action = .{ .new_split = .down },
-                .title = "Split Down",
-                .description = "Split the terminal down.",
+                .title = "New Terminal",
+                .description = "Insert a terminal column after the current one.",
             },
         },
 
         .goto_split => comptime &.{
             .{
                 .action = .{ .goto_split = .previous },
-                .title = "Focus Split: Previous",
-                .description = "Focus the previous split, if any.",
+                .title = "Focus Previous Terminal",
+                .description = "Focus and reveal the previous terminal column.",
             },
             .{
                 .action = .{ .goto_split = .next },
-                .title = "Focus Split: Next",
-                .description = "Focus the next split, if any.",
+                .title = "Focus Next Terminal",
+                .description = "Focus and reveal the next terminal column.",
             },
             .{
                 .action = .{ .goto_split = .left },
-                .title = "Focus Split: Left",
-                .description = "Focus the split to the left, if it exists.",
+                .title = "Focus Terminal to the Left",
+                .description = "Focus and reveal the terminal column to the left.",
             },
             .{
                 .action = .{ .goto_split = .right },
-                .title = "Focus Split: Right",
-                .description = "Focus the split to the right, if it exists.",
-            },
-            .{
-                .action = .{ .goto_split = .up },
-                .title = "Focus Split: Up",
-                .description = "Focus the split above, if it exists.",
-            },
-            .{
-                .action = .{ .goto_split = .down },
-                .title = "Focus Split: Down",
-                .description = "Focus the split below, if it exists.",
+                .title = "Focus Terminal to the Right",
+                .description = "Focus and reveal the terminal column to the right.",
             },
         },
 
@@ -521,8 +532,8 @@ fn actionCommands(action: Action.Key) []const Command {
 
         .toggle_split_zoom => comptime &.{.{
             .action = .toggle_split_zoom,
-            .title = "Toggle Split Zoom",
-            .description = "Toggle the zoom state of the current split.",
+            .title = "Toggle Terminal Zoom",
+            .description = "Expand the current terminal to the workspace width.",
         }},
 
         .toggle_readonly => comptime &.{.{
@@ -533,8 +544,8 @@ fn actionCommands(action: Action.Key) []const Command {
 
         .equalize_splits => comptime &.{.{
             .action = .equalize_splits,
-            .title = "Equalize Splits",
-            .description = "Equalize the size of all splits.",
+            .title = "Reset Column Widths",
+            .description = "Restore all terminal columns to their default width.",
         }},
 
         .reset_window_size => comptime &.{.{
@@ -582,18 +593,18 @@ fn actionCommands(action: Action.Key) []const Command {
         .close_tab => comptime &.{
             .{
                 .action = .{ .close_tab = .this },
-                .title = "Close Tab",
-                .description = "Close the current tab.",
+                .title = "Close Workspace",
+                .description = "Close the current workspace and its terminals.",
             },
             .{
                 .action = .{ .close_tab = .other },
-                .title = "Close Other Tabs",
-                .description = "Close all tabs in this window except the current one.",
+                .title = "Close Other Workspaces",
+                .description = "Close every workspace except the current one.",
             },
             .{
                 .action = .{ .close_tab = .right },
-                .title = "Close Tabs to the Right",
-                .description = "Close all tabs to the right of the current one.",
+                .title = "Close Workspaces Below",
+                .description = "Close all workspaces below the current one in the sidebar.",
             },
         },
 
